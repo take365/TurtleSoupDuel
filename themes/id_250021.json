@@ -1,0 +1,19 @@
+{
+  "id": "warewareda-0004",
+  "title": "毒キノコ",
+  "question": "男は辺りに毒キノコしかないのを見て安堵した。なぜ？",
+  "solution": "食用キノコは既に採集済み＝人が近くにいる証拠。遭難中の男は人里が近いと分かり安心した。",
+  "facts": [
+    "遭難中の男",
+    "毒キノコばかり＝人が採集済み",
+    "人里が近いと判断"
+  ],
+  "tags": [
+    "survival",
+    "logic",
+    "soft"
+  ],
+  "lang": "ja",
+  "source": "ウミガメのスープ良問・傑作集【第１弾】",
+  "source_url": "https://marutarou.com/2022/07/10/umigame-warewareda-1/"
+}

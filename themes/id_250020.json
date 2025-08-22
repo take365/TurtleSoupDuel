@@ -1,0 +1,19 @@
+{
+  "id": "warewareda-0003",
+  "title": "感謝",
+  "question": "男に銃口を突き付けられた女が、その男に感謝した。なぜ？",
+  "solution": "崖から落ちかけていた女を通りかかった猟師が銃を差し出して引き上げようとしたため。",
+  "facts": [
+    "崖から落ちかけた女",
+    "猟師が銃で手を差し伸べた",
+    "救助の場面"
+  ],
+  "tags": [
+    "mislead",
+    "rescue",
+    "soft"
+  ],
+  "lang": "ja",
+  "source": "ウミガメのスープ良問・傑作集【第１弾】",
+  "source_url": "https://marutarou.com/2022/07/10/umigame-warewareda-1/"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "note1-0015",
+  "title": "静かな銃声",
+  "question": "発砲音が聞こえたのに誰も驚かなかった。なぜ？",
+  "solution": "映画館のスクリーンから聞こえただけで、実際の発砲ではなかった。",
+  "facts": [
+    "映画館内",
+    "実際の発砲なし",
+    "音源は映像"
+  ],
+  "tags": [
+    "mislead",
+    "everyday",
+    "soft"
+  ],
+  "lang": "ja",
+  "source": "note: ウミガメのスープ厳選問題集その1",
+  "source_url": "https://note.com/anthracene1410/n/nee3e6b676207"
+}

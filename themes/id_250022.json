@@ -1,0 +1,19 @@
+{
+  "id": "warewareda-0005",
+  "title": "テスト",
+  "question": "定期試験でいつもより高得点を取った少女が『お母さんに怒られる』と慌てた。なぜ？",
+  "solution": "102点を取ったことで今までのテストが200点満点だったことがバレてしまうから。",
+  "facts": [
+    "過去の点数は200点満点",
+    "102点で事実が露呈",
+    "母に叱られる理由"
+  ],
+  "tags": [
+    "school",
+    "mislead",
+    "soft"
+  ],
+  "lang": "ja",
+  "source": "ウミガメのスープ良問・傑作集【第１弾】",
+  "source_url": "https://marutarou.com/2022/07/10/umigame-warewareda-1/"
+}

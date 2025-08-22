@@ -1,0 +1,19 @@
+{
+  "id": "note1-0005",
+  "title": "破壊的作品",
+  "question": "AもBも自作の“作品”を自分で壊し、どちらも半壊。Aは安堵し、Bは悲しんだ。なぜ？",
+  "solution": "作品はドミノ。Aは製作中に一部だけ倒れて助かった。Bは完成後に倒したのに最後まで倒れず不満。",
+  "facts": [
+    "題材はドミノ",
+    "A=製作中誤倒し",
+    "B=完成後に不完全崩し"
+  ],
+  "tags": [
+    "everyday",
+    "contrast",
+    "soft"
+  ],
+  "lang": "ja",
+  "source": "note: ウミガメのスープ厳選問題集その1",
+  "source_url": "https://note.com/anthracene1410/n/nee3e6b676207"
+}
