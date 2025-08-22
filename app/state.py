@@ -2,7 +2,8 @@ from dataclasses import dataclass, asdict
 from typing import List, Optional, Literal, Dict, Any
 
 from .theme_loader import load_theme, Theme
-from .providers.mock import MockLLMProvider
+import os
+from .providers.factory import create_provider
 
 
 Phase = Literal[
@@ -29,6 +30,8 @@ class QARec:
     judge: Optional[Literal["YES", "NO", "おしい", "不適切"]] = None
     note: Optional[str] = None
     result: Optional[Literal["CORRECT", "WRONG"]] = None
+    provider: Optional[str] = None
+    model: Optional[str] = None
 
 
 @dataclass
@@ -45,9 +48,11 @@ class GameState:
 class GameManager:
     def __init__(self) -> None:
         self.state = GameState(history=[], models={})
-        # Providers (both mock for v0.1 local)
-        self.mc = MockLLMProvider()
-        self.ai = MockLLMProvider()
+        # Initialize providers from env
+        self.mc = create_provider(os.getenv("MC_PROVIDER", "mock"), os.getenv("MC_MODEL"), role="mc")
+        self.ai = create_provider(os.getenv("AI_PROVIDER", "mock"), os.getenv("AI_MODEL"), role="ai")
+        print(f"[INIT] MC provider={os.getenv('MC_PROVIDER', 'mock')} model={os.getenv('MC_MODEL', 'gpt-4o-mini')}")
+        print(f"[INIT] AI provider={os.getenv('AI_PROVIDER', os.getenv('MC_PROVIDER', 'mock'))} model={os.getenv('AI_MODEL', os.getenv('MC_MODEL', 'gpt-4o-mini'))}")
 
     # Lifecycle
     def start_game(self, theme_id: str, ai_model: str) -> None:
@@ -59,7 +64,18 @@ class GameManager:
             phase="USER_Q",
             history=[],
             winner=None,
-            models={"mc_model": "mock", "ai_model": ai_model or "mock"},
+            models={
+                "mc_model": os.getenv("MC_MODEL") or "gpt-4o-mini",
+                "ai_model": ai_model or os.getenv("AI_MODEL") or os.getenv("MC_MODEL") or "gpt-4o-mini",
+                "mc_provider": (os.getenv("MC_PROVIDER") or "mock").lower(),
+                "ai_provider": (os.getenv("AI_PROVIDER") or os.getenv("MC_PROVIDER") or "mock").lower(),
+            },
+        )
+        # Recreate AI provider according to requested model/provider
+        ai_provider = os.getenv("AI_PROVIDER", os.getenv("MC_PROVIDER", "mock"))
+        self.ai = create_provider(ai_provider, self.state.models["ai_model"], role="ai")
+        print(
+            f"[GAME] start theme={theme_id} mc={self.state.models['mc_provider']}:{self.state.models['mc_model']} ai={self.state.models['ai_provider']}:{self.state.models['ai_model']}"
         )
 
     # User
@@ -68,9 +84,11 @@ class GameManager:
             raise ValueError("invalid_phase")
         rec = QARec(actor="user", kind="question", text=text, pass_=bool(is_pass))
         self.state.history.append(rec)
+        print(f"[API] /user/question -> '{(text or '')[:120]}'")
         judge = self.mc.ask_mc_judge(asdict(self.state.theme), self._hist_dicts(), text or "")  # type: ignore
         rec.judge = judge.get("judge")
         rec.note = judge.get("note")
+        print(f"[JUDGE] mc={self.state.models['mc_provider']}:{self.state.models['mc_model']} -> {rec.judge} ({rec.note or ''})")
         # Advance to next
         self.state.phase = "USER_GUESS"
         return judge
@@ -80,15 +98,18 @@ class GameManager:
             raise ValueError("invalid_phase")
         rec = QARec(actor="user", kind="guess", text=text, pass_=bool(is_pass))
         self.state.history.append(rec)
+        print(f"[API] /user/guess -> '{(text or '')[:120]}'")
         res = self.mc.ask_mc_verify(asdict(self.state.theme), text or "")  # type: ignore
         rec.result = res.get("result")
         if rec.result == "CORRECT":
             self.state.winner = "user"
             self.state.status = "WIN"
             self.state.phase = "WIN"
+            print("[JUDGE] user guess -> CORRECT (user win)")
             return {"result": "CORRECT", "is_win": True}
         # Advance to AI question
         self.state.phase = "AI_Q"
+        print("[JUDGE] user guess -> WRONG (AI_Q phase)")
         return {"result": "WRONG", "is_win": False}
 
     # AI
@@ -97,11 +118,16 @@ class GameManager:
             raise ValueError("invalid_phase")
         res = self.ai.ai_generate_question(asdict(self.state.theme), self._hist_dicts())  # type: ignore
         rec = QARec(actor="ai", kind="question", text=res.get("text"), pass_=False)
-        rec.judge = res.get("judge")
-        rec.note = res.get("note")
+        # Judge by MC provider
+        judge = self.mc.ask_mc_judge(asdict(self.state.theme), self._hist_dicts(), rec.text or "")  # type: ignore
+        rec.judge = judge.get("judge")
+        rec.note = judge.get("note")
+        rec.provider = self.state.models.get("ai_provider")
+        rec.model = self.state.models.get("ai_model")
         self.state.history.append(rec)
         # Advance to AI guess phase
         self.state.phase = "AI_GUESS"
+        print(f"[AI] question by {rec.provider}:{rec.model} -> '{(rec.text or '')[:120]}' | judge={rec.judge}")
         return {"text": rec.text, "judge": rec.judge, "note": rec.note}
 
     def ai_guess(self) -> Dict[str, Any]:
@@ -117,10 +143,16 @@ class GameManager:
             self.state.winner = "ai"
             self.state.status = "WIN"
             self.state.phase = "WIN"
+            rec.provider = self.state.models.get("ai_provider")
+            rec.model = self.state.models.get("ai_model")
+            print(f"[AI] guess by {rec.provider}:{rec.model} -> CORRECT (ai win)")
             return {"text": text, "result": "CORRECT", "is_win": True}
         # Advance turn
         self.state.turn += 1
         self.state.phase = "USER_Q"
+        rec.provider = self.state.models.get("ai_provider")
+        rec.model = self.state.models.get("ai_model")
+        print(f"[AI] guess by {rec.provider}:{rec.model} -> WRONG (turn {self.state.turn})")
         return {"text": text, "result": "WRONG", "is_win": False}
 
     def next_phase(self) -> Dict[str, Any]:
@@ -130,6 +162,7 @@ class GameManager:
         if self.state.phase == "WIN" and self.state.status == "WIN":
             self.state.status = "FINISHED"
             self.state.phase = "FINISHED"
+            print("[GAME] finalized -> FINISHED")
         return {
             "game_status": self.state.status,
             "current_turn": self.state.turn,
@@ -151,10 +184,13 @@ class GameManager:
                     "judge": h.judge,
                     "note": h.note,
                     "result": h.result,
+                    "provider": getattr(h, "provider", None),
+                    "model": getattr(h, "model", None),
                 }
                 for h in self.state.history
             ],
             "winner": self.state.winner,
+            "models": self.state.models,
         }
 
     def _hist_dicts(self) -> List[Dict[str, Any]]:
@@ -173,4 +209,3 @@ class GameManager:
 
 
 game_manager = GameManager()
-

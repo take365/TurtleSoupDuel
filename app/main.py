@@ -1,7 +1,17 @@
 import os
+from dotenv import load_dotenv, find_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+# Load .env before importing modules that consume env vars
+_dotenv_path = find_dotenv()
+if _dotenv_path:
+    load_dotenv(_dotenv_path, override=False)
+    print(f"[ENV] Loaded .env: {_dotenv_path}")
+else:
+    print("[ENV] .env not found; using OS environment")
+
 from .routers import api
 
 

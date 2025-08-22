@@ -7,7 +7,7 @@ JudgeLiteral = Literal["YES", "NO", "おしい", "不適切"]
 
 class StartGameRequest(BaseModel):
     theme_id: str
-    ai_model: str
+    ai_model: Optional[str] = None
 
 
 class StartGameResponse(BaseModel):
@@ -56,6 +56,8 @@ class QA(BaseModel):
     judge: Optional[JudgeLiteral] = None
     note: Optional[str] = None
     result: Optional[Literal["CORRECT", "WRONG"]] = None
+    provider: Optional[str] = None
+    model: Optional[str] = None
 
 
 class GameStateSnapshot(BaseModel):
@@ -76,6 +78,7 @@ class GameStateSnapshot(BaseModel):
     ]
     history: List[QA]
     winner: Optional[Literal["user", "ai"]] = None
+    models: Optional[dict] = None
 
 
 class NextTurnResponse(BaseModel):
@@ -98,4 +101,3 @@ class ThemePublic(BaseModel):
     question: str
     tags: Optional[List[str]] = None
     lang: Optional[str] = None
-

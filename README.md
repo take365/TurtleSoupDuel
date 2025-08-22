@@ -28,11 +28,15 @@ uvicorn app.main:app --reload --port 8000
 
 ```
 PORT=8000
-MC_PROVIDER=mock
-MC_MODEL=mock
-AI_PROVIDER=mock
+MC_PROVIDER=openai
+MC_MODEL=gpt-4o-mini
+AI_PROVIDER=openai
+AI_MODEL=gpt-4o-mini
+OPENAI_API_KEY=sk-...
 THEME_DIR=./themes
 ```
+
+- `.env`自動ロード: サーバ起動時にカレントの`.env`を自動読込（`python-dotenv`）。`.env`が無い場合はOSの環境変数を使用します。
 
 ## 主要エンドポイント
 
@@ -51,4 +55,3 @@ THEME_DIR=./themes
 - v0.1はメモリ管理・単一ゲームのみ。
 - LLMはネットワーク不要の`MockLLMProvider`で動作（`app/providers/mock.py`）。
 - テーマは`themes/*.json`。
-

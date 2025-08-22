@@ -20,7 +20,7 @@
     </div>
     <div class="row">
       <label>Theme ID: <input id="themeId" placeholder="turtle-0001" /></label>
-      <label>AI Model: <input id="aiModel" placeholder="mock" value="mock"/></label>
+      <label>AI Model: <input id="aiModel" placeholder="(空なら.envのAI_MODEL)" value=""/></label>
       <button id="start">/game/start</button>
     </div>
     <hr/>
@@ -43,11 +43,17 @@
       </div>
       <h3>状態</h3>
       <pre id="out"></pre>
+      <div id="models"></div>
     </div>
 
     <script>
       const out = document.getElementById('out');
       function show(obj) { out.textContent = JSON.stringify(obj, null, 2); }
+      function showModels(m) {
+        const el = document.getElementById('models');
+        if (!m) { el.textContent = ''; return; }
+        el.innerHTML = `<p><strong>MC:</strong> ${m.mc_provider}:${m.mc_model} | <strong>AI:</strong> ${m.ai_provider}:${m.ai_model}</p>`;
+      }
       async function api(path, init) {
         const r = await fetch('/api/v1' + path, { headers: { 'Content-Type': 'application/json' }, ...init });
         const t = await r.text();
@@ -60,8 +66,9 @@
       };
       document.getElementById('start').onclick = async () => {
         const theme_id = document.getElementById('themeId').value || 'turtle-0001';
-        const ai_model = document.getElementById('aiModel').value || 'mock';
-        const res = await api('/game/start', { method: 'POST', body: JSON.stringify({ theme_id, ai_model }) });
+        const ai_model = document.getElementById('aiModel').value.trim();
+        const payload = ai_model ? { theme_id, ai_model } : { theme_id };
+        const res = await api('/game/start', { method: 'POST', body: JSON.stringify(payload) });
         show(res);
       };
       document.getElementById('sendUserQ').onclick = async () => {
@@ -77,8 +84,11 @@
       document.getElementById('aiQ').onclick = async () => { show(await api('/game/ai/question', { method: 'POST' })); };
       document.getElementById('aiG').onclick = async () => { show(await api('/game/ai/guess', { method: 'POST' })); };
       document.getElementById('next').onclick = async () => { show(await api('/game/next', { method: 'POST' })); };
-      document.getElementById('state').onclick = async () => { show(await api('/game/state')); };
+      document.getElementById('state').onclick = async () => {
+        const s = await api('/game/state');
+        show(s);
+        showModels(s.models);
+      };
     </script>
   </body>
   </html>
-

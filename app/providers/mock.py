@@ -40,9 +40,12 @@ class MockLLMProvider(LLMProvider):
         keys = self._keywords(theme)
         matches = [k for k in keys if k in q]
         if not matches:
+            print(f"[LLM][Mock][mc_judge] q='{(question or '')[:80]}' -> NO")
             return {"judge": "NO", "note": "関係が薄いようです"}
         if len(matches) >= 3:
+            print(f"[LLM][Mock][mc_judge] q='{(question or '')[:80]}' -> YES")
             return {"judge": "YES", "note": "核心に近いです"}
+        print(f"[LLM][Mock][mc_judge] q='{(question or '')[:80]}' -> おしい")
         return {"judge": "おしい", "note": "一部は合っています"}
 
     def ask_mc_verify(self, theme: Dict[str, Any], guess: str) -> Dict[str, Any]:
@@ -56,7 +59,9 @@ class MockLLMProvider(LLMProvider):
         if not gtoks or not stoks:
             return {"result": "WRONG"}
         overlap = len(gtoks & stoks) / max(1, len(gtoks))
-        return {"result": "CORRECT" if overlap >= 0.5 else "WRONG"}
+        res = {"result": "CORRECT" if overlap >= 0.5 else "WRONG"}
+        print(f"[LLM][Mock][mc_verify] overlap={overlap:.2f} -> {res['result']}")
+        return res
 
     def ai_generate_question(self, theme: Dict[str, Any], history: list) -> Dict[str, Any]:
         asked = set(
@@ -73,17 +78,14 @@ class MockLLMProvider(LLMProvider):
         ]
         for c in candidates:
             if _norm(c) not in asked:
-                # Immediately judge with the same logic to return combined payload
-                j = self.ask_mc_judge(theme, history, c)
-                return {"text": c, **j}
+                return {"text": c}
         # Fallback generic
         c = "時間経過は重要ですか？"
-        j = self.ask_mc_judge(theme, history, c)
-        return {"text": c, **j}
+        return {"text": c}
 
     def ai_generate_guess(self, theme: Dict[str, Any], history: list) -> Dict[str, Any]:
         # Naively attempt to summarize by taking first sentence of solution
         sol = theme.get("solution", "").strip()
         text = sol.split("。")[0] + "。" if sol else "わかりません。"
+        print(f"[LLM][Mock][ai_guess] -> '{text[:80]}'")
         return {"text": text}
-

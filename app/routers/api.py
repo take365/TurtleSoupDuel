@@ -22,7 +22,9 @@ router = APIRouter()
 
 @router.get("/themes", response_model=List[ThemeSummary])
 def list_themes():
-    return get_themes()
+    res = get_themes()
+    print(f"[API] GET /themes -> {len(res)} items")
+    return res
 
 
 @router.get("/themes/{theme_id}")
@@ -30,6 +32,7 @@ def get_theme(theme_id: str):
     pub = get_theme_public(theme_id)
     if pub is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="theme_not_found")
+    print(f"[API] GET /themes/{theme_id} -> ok")
     return pub
 
 
@@ -39,6 +42,7 @@ def start_game(req: StartGameRequest):
         game_manager.start_game(req.theme_id, req.ai_model)
     except FileNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="theme_not_found")
+    print(f"[API] POST /game/start theme={req.theme_id} ai_model={req.ai_model}")
     return StartGameResponse(game_status="IN_TURN", current_turn=1, player="user")
 
 
@@ -46,6 +50,7 @@ def start_game(req: StartGameRequest):
 def user_question(req: UserQuestionRequest):
     try:
         judge = game_manager.user_question(req.text, bool(req.pass_))
+        print(f"[API] POST /game/user/question -> {judge}")
         return UserQuestionResponse(**judge)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="invalid_phase")
@@ -55,6 +60,7 @@ def user_question(req: UserQuestionRequest):
 def user_guess(req: UserGuessRequest):
     try:
         res = game_manager.user_guess(req.text, bool(req.pass_))
+        print(f"[API] POST /game/user/guess -> {res}")
         return UserGuessResponse(**res)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="invalid_phase")
@@ -64,6 +70,7 @@ def user_guess(req: UserGuessRequest):
 def ai_question():
     try:
         res = game_manager.ai_question()
+        print(f"[API] POST /game/ai/question -> {res}")
         return AIQuestionResponse(**res)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="invalid_phase")
@@ -73,6 +80,7 @@ def ai_question():
 def ai_guess():
     try:
         res = game_manager.ai_guess()
+        print(f"[API] POST /game/ai/guess -> {res}")
         return AIGuessResponse(**res)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="invalid_phase")
@@ -82,6 +90,7 @@ def ai_guess():
 def next_turn():
     try:
         res = game_manager.next_phase()
+        print(f"[API] POST /game/next -> {res['phase']} status={res['game_status']}")
         return NextTurnResponse(**res)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="invalid_phase")
@@ -89,5 +98,6 @@ def next_turn():
 
 @router.get("/game/state", response_model=GameStateSnapshot)
 def get_state():
-    return game_manager.snapshot()
-
+    snap = game_manager.snapshot()
+    print(f"[API] GET /game/state -> phase={snap['phase']} turn={snap['turn']}")
+    return snap
