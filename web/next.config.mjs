@@ -1,18 +1,19 @@
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Ensure Node.js runtime (avoid Edge by default)
   experimental: {
-    // No special flags needed; routes can declare runtime individually.
+    // Avoid bundling cassandra-driver; load it at runtime on server.
+    serverComponentsExternalPackages: ['cassandra-driver'],
   },
-  typescript: {
-    // Allow build to proceed even if type errors exist (initial scaffolding)
-    ignoreBuildErrors: false
+  typescript: { ignoreBuildErrors: false },
+  eslint: { ignoreDuringBuilds: true },
+  webpack: (config, { isServer }) => {
+    // Ignore optional native deps pulled by cassandra-driver (e.g., kerberos)
+    config.resolve = config.resolve || {};
+    config.resolve.alias = { ...(config.resolve.alias || {}), kerberos: false };
+    return config;
   },
-  eslint: {
-    ignoreDuringBuilds: true
-  }
 };
 
 export default nextConfig;
-
