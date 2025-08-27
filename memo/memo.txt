@@ -1,0 +1,15 @@
+使い方
+
+- 事前にCassandra接続設定（web/.env.local またはシェルの環境変数）
+    - CASSANDRA_CONTACT_POINTS=127.0.0.1:9042
+    - CASSANDRA_DC=dc1（環境に合わせる）
+    - CASSANDRA_KEYSPACE=turtlesoup
+    - 必要なら CASSANDRA_USER, CASSANDRA_PASS
+- シード実行（web ディレクトリ内）
+    - 招待のみ: npm run seed:invites
+    - 例: `SEED_INVITE_CODE=dev-2025 SEED_INVITE_USES=8 npm run seed:invites`
+- テーマのみ: npm run seed:themes
+- 両方まとめて: npm run seed:all
+- 確認（数行出力）
+    - npm run show:samples
+    - 出力例: invites_by_code 上位5件、ある招待コードの invite_slots 件数、themes_by_id 上位5件

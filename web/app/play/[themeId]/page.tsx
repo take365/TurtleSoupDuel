@@ -8,6 +8,10 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
   const [started, setStarted] = useState(false);
   const [events, setEvents] = useState<Ev[]>([]);
   const [input, setInput] = useState('');
+  const [limited, setLimited] = useState(false);
+  const [liked, setLiked] = useState(false);
+  const [cleared, setCleared] = useState(false);
+  const [aff, setAff] = useState<number | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -23,7 +27,11 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
       try { const data = JSON.parse(e.data) as Ev; setEvents((prev) => [...prev, data]); }
       catch { /* ignore */ }
     };
-    es.onerror = () => { es.close(); };
+    es.onerror = (err: any) => {
+      es.close();
+      // 429時はレート制限を表示
+      setLimited(true);
+    };
   };
 
   const send = () => {
@@ -33,14 +41,32 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
     setInput('');
   };
 
+  const like = async () => {
+    const r = await fetch(`/api/themes/${encodeURIComponent(themeId)}/like`, { method: 'POST' });
+    setLiked(true);
+  };
+  const unlike = async () => {
+    const r = await fetch(`/api/themes/${encodeURIComponent(themeId)}/unlike`, { method: 'POST' });
+    setLiked(false);
+  };
+  const clear = async () => {
+    const r = await fetch(`/api/themes/${encodeURIComponent(themeId)}/clear`, { method: 'POST' });
+    if (r.ok) setCleared(true);
+  };
+  const addAffinity = async (d: number) => {
+    const r = await fetch(`/api/characters/${encodeURIComponent('char-1')}/affinity`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ delta: d }) });
+    try { const j = await r.json(); if (j && typeof j.score === 'number') setAff(j.score); } catch {}
+  };
+
   return (
     <main className="min-h-screen p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
       <aside className="border rounded p-4 space-y-2">
         <h2 className="font-semibold">テーマ</h2>
         <div className="text-sm text-gray-600">ID: {themeId}</div>
-        <button onClick={start} disabled={started} className="bg-blue-600 text-white rounded px-3 py-2 disabled:opacity-50">
+        <button onClick={start} disabled={started || limited} className="bg-blue-600 text-white rounded px-3 py-2 disabled:opacity-50">
           {started ? '進行中' : '開始'}
         </button>
+        {limited && (<div className="text-sm text-red-600">本日の上限に達しました。</div>)}
       </aside>
       <section className="lg:col-span-2 border rounded p-4 flex flex-col gap-3">
         <div className="flex-1 border rounded p-3 bg-gray-50 overflow-auto max-h-[60vh]">
@@ -52,12 +78,20 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
           ))}
           {!events.length && <div className="text-gray-400 text-sm">開始ボタンを押してSSEを受信</div>}
         </div>
+        <div className="flex items-center gap-3 text-sm">
+          <button onClick={liked ? unlike : like} className="border rounded px-2 py-1">{liked ? 'いいね解除' : 'いいね'}</button>
+          <button onClick={clear} className="border rounded px-2 py-1" disabled={cleared}>{cleared ? 'クリア済み' : 'クリア記録'}</button>
+          <div className="ml-auto flex items-center gap-2">
+            <span>好感度{aff != null ? `: ${aff}` : ''}</span>
+            <button onClick={() => addAffinity(+5)} className="border rounded px-2 py-1">+5</button>
+            <button onClick={() => addAffinity(-5)} className="border rounded px-2 py-1">-5</button>
+          </div>
+        </div>
         <div className="flex gap-2">
-          <input className="flex-1 border rounded px-3 py-2" placeholder="質問や解答を入力" value={input} onChange={(e) => setInput(e.target.value)} />
-          <button onClick={send} className="border rounded px-3 py-2">送信</button>
+          <input className="flex-1 border rounded px-3 py-2" placeholder="質問や解答を入力" value={input} onChange={(e) => setInput(e.target.value)} disabled={limited} />
+          <button onClick={send} className="border rounded px-3 py-2" disabled={limited}>送信</button>
         </div>
       </section>
     </main>
   );
 }
-

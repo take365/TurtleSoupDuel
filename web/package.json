@@ -10,7 +10,11 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p ${PORT:-3000}",
-    "lint": "next lint"
+    "lint": "next lint",
+    "seed:invites": "node scripts/seed_invites.js",
+    "seed:themes": "node scripts/seed_themes.js",
+    "seed:all": "node scripts/seed_themes.js && node scripts/seed_invites.js",
+    "show:samples": "node scripts/show_samples.js"
   },
   "dependencies": {
     "next": "14.2.5",

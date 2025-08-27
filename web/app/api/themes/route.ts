@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCassandra } from '@/lib/cassandra';
+import { getUserIdFromCookie } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 
@@ -27,16 +28,30 @@ export async function GET() {
         { themeId: 'sample-2', title: 'サンプル2: 壊れた時計', snippet: '進まない針の理由', likes: 0, cleared: false },
       ]);
     }
-    const data = rows.map((row: any) => ({
-      themeId: row.get ? row.get('theme_id') : row.theme_id,
-      title: row.get ? row.get('title') : row.title,
-      snippet: row.get ? row.get('snippet') : row.snippet,
-      likes: 0,
-      cleared: false,
-    }));
+    const userId = await getUserIdFromCookie(cassandra);
+    const data = [] as any[];
+    for (const row of rows) {
+      const themeId = row.get ? row.get('theme_id') : row.theme_id;
+      const title = row.get ? row.get('title') : row.title;
+      const snippet = row.get ? row.get('snippet') : row.snippet;
+      // likes counter
+      let likes = 0;
+      try {
+        const rc = await cassandra.execute('SELECT likes FROM theme_like_counts WHERE theme_id=?', [themeId], { prepare: true });
+        if (rc.rowLength) likes = Number(rc.first()!.get('likes') || 0);
+      } catch {}
+      // cleared for current user
+      let cleared = false;
+      if (userId) {
+        try {
+          const rr = await cassandra.execute('SELECT theme_id FROM clears_by_user WHERE user_id=? AND theme_id=?', [userId, themeId], { prepare: true });
+          cleared = rr.rowLength > 0;
+        } catch {}
+      }
+      data.push({ themeId, title, snippet, likes, cleared });
+    }
     return NextResponse.json(data);
   } catch (e: any) {
     return jsonError('server_error', 'Failed to load themes', e?.message);
   }
 }
-
