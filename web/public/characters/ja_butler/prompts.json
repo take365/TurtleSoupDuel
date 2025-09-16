@@ -1,0 +1,10 @@
+{
+  "display_name": "執事",
+  "initial_text": "お疲れ様でございます、ご主人様。本日はいかがお過ごしでいらっしゃいましたでしょうか。何かご用命がございましたら、遠慮なくお申し付けください。",
+  "平常心": { "image": "butler_neutral.png" },
+  "興味・前進": { "image": "butler_respectful.png" },
+  "惜しい・再考": { "image": "butler_concerned.png" },
+  "否定・落胆": { "image": "butler_neutral.png" },
+  "厳格・注意": { "image": "butler_firm.png" },
+  "喜び・勝利": { "image": "butler_respectful.png" }
+}

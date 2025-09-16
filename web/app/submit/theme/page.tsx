@@ -1,7 +1,10 @@
 "use client";
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function SubmitThemePage() {
+  const router = useRouter();
+  const sp = useSearchParams();
   const [title, setTitle] = useState('');
   const [question, setQuestion] = useState('');
   const [solution, setSolution] = useState('');
@@ -10,6 +13,41 @@ export default function SubmitThemePage() {
   const [msg, setMsg] = useState<string>('');
 
   const payload = { title, question, solution };
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch('/api/auth/me', { cache: 'no-store' });
+        if (!r.ok) router.push('/login?next=/submit/theme');
+      } catch {
+        router.push('/login?next=/submit/theme');
+      }
+    })();
+  }, [router]);
+
+  // 編集モード（?id=...）なら下書きを読み込み
+  useEffect(() => {
+    const qid = sp.get('id');
+    if (!qid) return;
+    (async () => {
+      try {
+        const r = await fetch(`/api/user-themes/${encodeURIComponent(qid)}`, { cache: 'no-store' });
+        const j = await r.json();
+        if (r.ok && j?.payload) {
+          setId(j.id);
+          setStatus(j.status || 'draft');
+          setTitle(j.payload.title || '');
+          setQuestion(j.payload.question || '');
+          setSolution(j.payload.solution || '');
+          setMsg('下書きを読み込みました');
+        } else {
+          setMsg(j?.message || '読み込みに失敗しました');
+        }
+      } catch (e: any) {
+        setMsg('読み込みに失敗しました: ' + e.message);
+      }
+    })();
+  }, [sp]);
 
   const createOrUpdate = async () => {
     setMsg('');
@@ -44,10 +82,9 @@ export default function SubmitThemePage() {
       <textarea className="w-full border rounded px-3 py-2" placeholder="解説（正解）" rows={6} value={solution} onChange={(e) => setSolution(e.target.value)} />
       <div className="flex gap-3">
         <button onClick={createOrUpdate} className="border rounded px-3 py-2">下書きを保存</button>
-        <button onClick={submit} className="border rounded px-3 py-2" disabled={!id}>申請する</button>
+        <button onClick={submit} className="border rounded px-3 py-2" disabled={!id}>登録する</button>
       </div>
       {msg && <div className="text-sm text-gray-700">{msg}</div>}
     </main>
   );
 }
-

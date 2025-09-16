@@ -13,9 +13,10 @@ export async function GET() {
   try { cassandra = await getCassandra(); await cassandra.connect(); }
   catch (e: any) {
     // Fallback sample when DB not reachable
+    // NOTE: バックエンドのthemes/に存在するIDに合わせる
     return NextResponse.json([
-      { themeId: 'sample-1', title: 'サンプル1: なくした鍵', snippet: '鍵はどこへ？', likes: 0, cleared: false },
-      { themeId: 'sample-2', title: 'サンプル2: 壊れた時計', snippet: '進まない針の理由', likes: 0, cleared: false },
+      { themeId: 'warewareda-0001', title: '２０cm', snippet: '盆栽を一日平均計２０cm移動させる男。なぜ？', likes: 0, cleared: false },
+      { themeId: 'warewareda-0002', title: '好奇心', snippet: '自分の寿命を知りたくなった男は死んだ。なぜ？', likes: 0, cleared: false },
     ]);
   }
 
@@ -23,9 +24,10 @@ export async function GET() {
     const r = await cassandra.execute('SELECT theme_id, title, snippet FROM themes_by_id LIMIT 100');
     const rows = r.rows || [];
     if (!rows.length) {
+      // DBが空の場合も同様に既存テーマのIDを返す
       return NextResponse.json([
-        { themeId: 'sample-1', title: 'サンプル1: なくした鍵', snippet: '鍵はどこへ？', likes: 0, cleared: false },
-        { themeId: 'sample-2', title: 'サンプル2: 壊れた時計', snippet: '進まない針の理由', likes: 0, cleared: false },
+        { themeId: 'warewareda-0001', title: '２０cm', snippet: '盆栽を一日平均計２０cm移動させる男。なぜ？', likes: 0, cleared: false },
+        { themeId: 'warewareda-0002', title: '好奇心', snippet: '自分の寿命を知りたくなった男は死んだ。なぜ？', likes: 0, cleared: false },
       ]);
     }
     const userId = await getUserIdFromCookie(cassandra);

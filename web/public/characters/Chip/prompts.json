@@ -1,0 +1,11 @@
+{
+  "display_name": "情報屋のチップ",
+  "initial_text": "あ、あ！新しい人だ！えへへ、僕Chip！よろしくね〜♪ ちょ、ちょっと待って、君のこと全然知らないじゃない！どこから来たの？何してる人？あ、もしかして面白い話とか知ってる？！僕、そういうの大好きなんだ〜！",
+
+  "平常心": { "image": "chip_neutral.png" },
+  "興味・前進": { "image": "chip_excited.png" },
+  "惜しい・再考": { "image": "chip_mischievous.png" },
+  "否定・落胆": { "image": "chip_sad.png" },
+  "厳格・注意": { "image": "chip_skeptical.png" },
+  "喜び・勝利": { "image": "chip_excited.png" }
+}

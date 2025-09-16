@@ -60,11 +60,24 @@ export async function POST(req: Request) {
   }
 
   if (action === 'submit') {
-    // LWT: status draft -> submitted
-    const r = await cassandra.execute('UPDATE user_themes SET status=?, updated_at=? WHERE user_theme_id=? IF status=?', ['submitted', new Date(), id, 'draft'], { prepare: true });
-    if (!r.wasApplied()) return err('conflict', 'not in draft or already submitted', undefined, 409);
-    return NextResponse.json({ id, status: 'submitted' });
+    // Draft -> Public に変更し、themes_by_id へ即時公開反映
+    const now = new Date();
+    const r = await cassandra.execute(
+      'UPDATE user_themes SET status=?, updated_at=? WHERE user_theme_id=? IF status=?',
+      ['public', now, id, 'draft'], { prepare: true }
+    );
+    if (!r.wasApplied()) return err('conflict', 'not in draft or already public', undefined, 409);
+    // 取得して publish
+    const r0 = await cassandra.execute('SELECT payload_json FROM user_themes WHERE user_theme_id=?', [id], { prepare: true });
+    const payload = safeJSON(r0.first()?.get('payload_json')) || {};
+    const title = String(payload.title || '').slice(0, 120) || 'Untitled';
+    const question = String(payload.question || '');
+    const snippet = (question.replace(/\s+/g, ' ').trim()).slice(0, 40);
+    await cassandra.execute(
+      'INSERT INTO themes_by_id (theme_id, title, snippet) VALUES (?, ?, ?)',
+      [id, title, snippet], { prepare: true }
+    );
+    return NextResponse.json({ id, status: 'public', themeId: id });
   }
   return err('invalid_action', 'unsupported');
 }
-

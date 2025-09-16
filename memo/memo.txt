@@ -13,3 +13,24 @@
 - 確認（数行出力）
     - npm run show:samples
     - 出力例: invites_by_code 上位5件、ある招待コードの invite_slots 件数、themes_by_id 上位5件
+
+
+
+A) 単一ファイル（例：004だけ）を適用
+# 004 のファイル名はあなたの手元に合わせてね
+docker run --rm -it --network=host   -v "D:\project\TurtleSoupDuel\web\db\migrations:/m"   cassandra:4.1 cqlsh 127.0.0.1 9042 -k turtlesoup -f "/m/004_progress_likes_affinity.cql"
+
+B) すべてを番号順に適用（PowerShell）
+Get-ChildItem "D:\project\TurtleSoupDuel\web\db\migrations\*.cql" |
+  Sort-Object Name |
+  ForEach-Object {
+    docker run --rm --network=host `
+      -v "D:\project\TurtleSoupDuel\web\db\migrations:/m" `
+      cassandra:4.1 cqlsh 127.0.0.1 9042 -k turtlesoup -f ("/m/" + $_.Name)
+  }
+
+C) 適用できたか確認
+docker run --rm -it --network=host cassandra:4.1 cqlsh 127.0.0.1 9042   -e "SELECT table_name FROM system_schema.tables WHERE keyspace_name='turtlesoup';"
+
+
+Windowsパスは必ずクォート。-k turtlesoup で keyspace 明示。ファイル内に USE turtlesoup; があってもOK。

@@ -24,7 +24,7 @@ export default function LoginPage() {
         try { const j = await res.json(); msg = `${j.code || res.status}`; } catch {}
         setError(msg);
       } else {
-        router.push("/me");
+        router.push("/themes");
       }
     } finally {
       setLoading(false);
@@ -63,4 +63,3 @@ export default function LoginPage() {
     </main>
   );
 }
-

@@ -87,6 +87,8 @@ Pipfile.lock
 # Environments
 .env
 .venv
+.venv_cli
+.venv_tools
 env/
 venv/
 ENV/

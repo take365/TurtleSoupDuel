@@ -36,6 +36,9 @@ export default async function MyThemesPage() {
             <div className="text-sm text-gray-500">{t.id}</div>
             <div className="font-semibold">{t.payload?.title || '(no title)'}</div>
             <div className="text-sm">status: {t.status}</div>
+            <div className="mt-2 text-sm">
+              <a className="underline text-blue-600" href={`/submit/theme?id=${encodeURIComponent(t.id)}`}>編集</a>
+            </div>
           </div>
         ))}
       </div>
@@ -45,4 +48,3 @@ export default async function MyThemesPage() {
     </main>
   );
 }
-
