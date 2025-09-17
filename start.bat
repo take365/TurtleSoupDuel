@@ -6,26 +6,39 @@ pushd %~dp0
 
 echo [START] TurtleSoupDuel starting...
 
-REM Create venv if missing
-if not exist .venv\Scripts\python.exe (
-  echo [VENV] Creating virtual environment...
-  py -3 -m venv .venv || (
-    echo [ERROR] Failed to create virtual environment.
-    pause
-    exit /b 1
+set "ROOT_DIR=%CD%"
+set "LOG_DIR=%ROOT_DIR%\logs"
+if not exist "%LOG_DIR%" (
+  mkdir "%LOG_DIR%"
+)
+set "WEB_DIR=%ROOT_DIR%\web"
+set "NEXT_LOG=%LOG_DIR%\next-dev.log"
+set "FASTAPI_LOG=%LOG_DIR%\fastapi.log"
+
+set "VENV_DIR=%~dp0.venv_win"
+set "VENV_PY=%VENV_DIR%\Scripts\python.exe"
+set "OLD_VENV=%~dp0.venv"
+if exist "%OLD_VENV%" (
+  echo [VENV] Removing WSL virtualenv (.venv)
+  rmdir /S /Q "%OLD_VENV%" >nul 2>&1
+)
+if exist "%VENV_DIR%\pyvenv.cfg" (
+  findstr /C:"version = 3.11" "%VENV_DIR%\pyvenv.cfg" >nul 2>&1
+  if errorlevel 1 (
+    echo [VENV] Recreating .venv_win with Python 3.11...
+    rmdir /S /Q "%VENV_DIR%"
   )
 )
 
-REM Upgrade pip and install dependencies if needed
+
 echo [PIP] Ensuring pip and requirements are installed...
-".venv\Scripts\python.exe" -m pip install --upgrade pip >nul 2>&1
-".venv\Scripts\python.exe" -m pip install -r requirements.txt || (
+"%VENV_PY%" -m pip install --upgrade pip >nul 2>&1
+"%VENV_PY%" -m pip install -r requirements.txt || (
   echo [ERROR] Failed to install requirements.
   pause
   exit /b 1
 )
 
-REM --- Optionally start Next.js frontend (requires Node.js 18+) ---
 where node >nul 2>nul
 if %ERRORLEVEL% NEQ 0 (
   echo [WARN] Node.js not found. Skipping Next.js frontend. Install Node.js 18+ to enable web UI.
@@ -42,21 +55,20 @@ if %ERRORLEVEL% NEQ 0 (
         goto START_UVICORN
       )
     )
-    echo [NEXT] Starting Next.js dev server at http://localhost:3000
-    start "Next.js" cmd /k "npm run dev"
+    powershell -Command "Add-Content -Path $env:NEXT_LOG -Value ('--- Next.js dev start ' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' ---')"
+    echo [NEXT] Starting Next.js dev server at http://localhost:3000 (logging to %NEXT_LOG%)
+    start "Next.js" powershell -NoExit -Command "& { Set-Location -LiteralPath '%WEB_DIR%'; npm run dev 2>&1 | Tee-Object -FilePath $env:NEXT_LOG -Append }"
   )
   popd
 )
 
-REM Load .env is handled in app/main.py via python-dotenv
-REM Optionally set default host/port if not provided in .env
 if not defined HOST set HOST=0.0.0.0
 if not defined PORT set PORT=8000
 
-:
 :START_UVICORN
-echo [UVICORN] Launching at http://%HOST%:%PORT% (Ctrl+C to stop)
-".venv\Scripts\python.exe" -m uvicorn app.main:app --host %HOST% --port %PORT% --reload
+powershell -Command "Add-Content -Path $env:FASTAPI_LOG -Value ('--- FastAPI start ' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' ---')"
+echo [UVICORN] Launching at http://%HOST%:%PORT% (Ctrl+C to stop, logging to %FASTAPI_LOG%)
+"%VENV_PY%" -m uvicorn app.main:app --host %HOST% --port %PORT% --reload 2>&1 | powershell -Command "$input | Tee-Object -FilePath $env:FASTAPI_LOG -Append"
 
 popd
 endlocal

@@ -1,12 +1,10 @@
-import json
-import os
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
+
+from cassandra.cluster import ResultSet, NoHostAvailable
 
 from .schemas import ThemeSummary, ThemePublic
-
-
-THEME_DIR = os.getenv("THEME_DIR", "./themes")
+from .cassandra_client import get_session
 
 
 @dataclass
@@ -18,65 +16,66 @@ class Theme:
     facts: Optional[List[str]] = None
     tags: Optional[List[str]] = None
     lang: Optional[str] = None
-
-
-def _iter_theme_files() -> List[str]:
-    if not os.path.isdir(THEME_DIR):
-        return []
-    files = [
-        os.path.join(THEME_DIR, f)
-        for f in os.listdir(THEME_DIR)
-        if f.endswith(".json") and os.path.isfile(os.path.join(THEME_DIR, f))
-    ]
-    return sorted(files)
-
-
-def _load_json(path: str) -> Dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
 def get_themes() -> List[ThemeSummary]:
-    summaries: List[ThemeSummary] = []
-    for path in _iter_theme_files():
-        data = _load_json(path)
-        summaries.append(
-            ThemeSummary(
-                id=data["id"],
-                title=data["title"],
-                tags=data.get("tags"),
-                lang=data.get("lang"),
-            )
+    try:
+        session = get_session()
+        rows: ResultSet = session.execute(
+            "SELECT theme_id, title, tags, lang FROM themes_by_id"
         )
+    except NoHostAvailable as exc:  # pragma: no cover - depends on runtime infra
+        raise RuntimeError("cassandra_unavailable") from exc
+    summaries: List[ThemeSummary] = []
+    for row in rows:
+        theme_id = getattr(row, "theme_id", None)
+        if not theme_id:
+            continue
+        tags = list(getattr(row, "tags", []) or [])
+        lang = getattr(row, "lang", None)
+        title = getattr(row, "title", "")
+        summaries.append(ThemeSummary(id=theme_id, title=title, tags=tags or None, lang=lang))
     return summaries
 
 
 def get_theme_public(theme_id: str) -> Optional[ThemePublic]:
-    for path in _iter_theme_files():
-        data = _load_json(path)
-        if data.get("id") == theme_id:
-            return ThemePublic(
-                id=data["id"],
-                title=data["title"],
-                question=data["question"],
-                tags=data.get("tags"),
-                lang=data.get("lang"),
-            )
-    return None
+    try:
+        session = get_session()
+        row = session.execute(
+            "SELECT theme_id, title, question, tags, lang FROM themes_by_id WHERE theme_id=%s",
+            (theme_id,),
+        ).one()
+    except NoHostAvailable as exc:  # pragma: no cover
+        raise RuntimeError("cassandra_unavailable") from exc
+    if row is None:
+        return None
+    tags = list(getattr(row, "tags", []) or [])
+    return ThemePublic(
+        id=getattr(row, "theme_id"),
+        title=getattr(row, "title", ""),
+        question=getattr(row, "question", ""),
+        tags=tags or None,
+        lang=getattr(row, "lang", None),
+    )
 
 
 def load_theme(theme_id: str) -> Theme:
-    for path in _iter_theme_files():
-        data = _load_json(path)
-        if data.get("id") == theme_id:
-            return Theme(
-                id=data["id"],
-                title=data["title"],
-                question=data["question"],
-                solution=data["solution"],
-                facts=data.get("facts"),
-                tags=data.get("tags"),
-                lang=data.get("lang"),
-            )
-    raise FileNotFoundError(theme_id)
-
+    try:
+        session = get_session()
+        row = session.execute(
+            "SELECT theme_id, title, question, solution, facts, tags, lang FROM themes_by_id WHERE theme_id=%s",
+            (theme_id,),
+        ).one()
+    except NoHostAvailable as exc:  # pragma: no cover
+        raise RuntimeError("cassandra_unavailable") from exc
+    if row is None:
+        raise FileNotFoundError(theme_id)
+    facts = list(getattr(row, "facts", []) or [])
+    tags = list(getattr(row, "tags", []) or [])
+    return Theme(
+        id=getattr(row, "theme_id"),
+        title=getattr(row, "title", ""),
+        question=getattr(row, "question", ""),
+        solution=getattr(row, "solution", ""),
+        facts=facts or None,
+        tags=tags or None,
+        lang=getattr(row, "lang", None),
+    )

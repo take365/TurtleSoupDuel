@@ -16,6 +16,7 @@
     "seed:all": "node scripts/seed_themes.js && node scripts/seed_invites.js",
     "show:samples": "node scripts/show_samples.js",
     "db:inspect": "node scripts/db_inspect.js",
+    "db:import-themes": "node scripts/import_theme_json.js",
     "e2e:smoke": "node scripts/test_e2e_smoke.js"
   },
   "dependencies": {

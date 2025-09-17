@@ -22,14 +22,24 @@ router = APIRouter()
 
 @router.get("/themes", response_model=List[ThemeSummary])
 def list_themes():
-    res = get_themes()
+    try:
+        res = get_themes()
+    except RuntimeError as exc:
+        if str(exc) == "cassandra_unavailable":
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="cassandra_unavailable")
+        raise
     print(f"[API] GET /themes -> {len(res)} items")
     return res
 
 
 @router.get("/themes/{theme_id}")
 def get_theme(theme_id: str):
-    pub = get_theme_public(theme_id)
+    try:
+        pub = get_theme_public(theme_id)
+    except RuntimeError as exc:
+        if str(exc) == "cassandra_unavailable":
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="cassandra_unavailable")
+        raise
     if pub is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="theme_not_found")
     print(f"[API] GET /themes/{theme_id} -> ok")
@@ -42,6 +52,10 @@ def start_game(req: StartGameRequest):
         game_manager.start_game(req.theme_id, req.ai_model)
     except FileNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="theme_not_found")
+    except RuntimeError as exc:
+        if str(exc) == "cassandra_unavailable":
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="cassandra_unavailable")
+        raise
     print(f"[API] POST /game/start theme={req.theme_id} ai_model={req.ai_model}")
     return StartGameResponse(game_status="IN_TURN", current_turn=1, player="user")
 
