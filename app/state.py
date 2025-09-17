@@ -6,6 +6,9 @@ import os
 from .providers.factory import create_provider
 
 
+MAX_TURNS = 10
+
+
 Phase = Literal[
     "USER_Q",
     "MC_A",
@@ -17,14 +20,15 @@ Phase = Literal[
     "AI_MC_JUDGE",
     "IDLE",
     "WIN",
+    "DRAW",
     "FINISHED",
 ]
 
 
 @dataclass
 class QARec:
-    actor: Literal["user", "ai"]
-    kind: Literal["question", "guess"]
+    actor: Literal["user", "ai", "mc"]
+    kind: Literal["question", "guess", "note"]
     text: Optional[str]
     pass_: bool
     judge: Optional[Literal["YES", "NO", "おしい", "不適切"]] = None
@@ -36,7 +40,7 @@ class QARec:
 
 @dataclass
 class GameState:
-    status: Literal["IDLE", "THEME_SELECTED", "IN_TURN", "WIN", "FINISHED"] = "IDLE"
+    status: Literal["IDLE", "THEME_SELECTED", "IN_TURN", "WIN", "DRAW", "FINISHED"] = "IDLE"
     theme: Optional[Theme] = None
     turn: int = 0
     phase: Phase = "IDLE"
@@ -106,11 +110,22 @@ class GameManager:
             self.state.status = "WIN"
             self.state.phase = "WIN"
             print("[JUDGE] user guess -> CORRECT (user win)")
-            return {"result": "CORRECT", "is_win": True}
+            explanation = self._build_explanation()
+            if explanation:
+                self.state.history.append(
+                    QARec(actor="mc", kind="note", text=explanation, pass_=False, note="解説")
+                )
+            return {
+                "result": "CORRECT",
+                "is_win": True,
+                "winner": "user",
+                "explanation": explanation,
+                "is_draw": False,
+            }
         # Advance to AI question
         self.state.phase = "AI_Q"
         print("[JUDGE] user guess -> WRONG (AI_Q phase)")
-        return {"result": "WRONG", "is_win": False}
+        return {"result": "WRONG", "is_win": False, "winner": None, "is_draw": False}
 
     # AI
     def ai_question(self) -> Dict[str, Any]:
@@ -145,28 +160,67 @@ class GameManager:
             self.state.phase = "WIN"
             rec.provider = self.state.models.get("ai_provider")
             rec.model = self.state.models.get("ai_model")
+            explanation = self._build_explanation()
+            if explanation:
+                self.state.history.append(
+                    QARec(actor="mc", kind="note", text=explanation, pass_=False, note="解説")
+                )
             print(f"[AI] guess by {rec.provider}:{rec.model} -> CORRECT (ai win)")
-            return {"text": text, "result": "CORRECT", "is_win": True}
+            return {
+                "text": text,
+                "result": "CORRECT",
+                "is_win": True,
+                "winner": "ai",
+                "explanation": explanation,
+                "is_draw": False,
+            }
+        if self.state.turn >= MAX_TURNS:
+            self.state.status = "DRAW"
+            self.state.phase = "DRAW"
+            draw_note = "10ターン経過したため引き分けです。"
+            self.state.history.append(
+                QARec(actor="mc", kind="note", text=draw_note, pass_=False, note="引き分け")
+            )
+            print(f"[GAME] draw reached after {self.state.turn} turns")
+            return {
+                "text": text,
+                "result": "WRONG",
+                "is_win": False,
+                "winner": None,
+                "is_draw": True,
+            }
         # Advance turn
         self.state.turn += 1
         self.state.phase = "USER_Q"
         rec.provider = self.state.models.get("ai_provider")
         rec.model = self.state.models.get("ai_model")
         print(f"[AI] guess by {rec.provider}:{rec.model} -> WRONG (turn {self.state.turn})")
-        return {"text": text, "result": "WRONG", "is_win": False}
+        return {
+            "text": text,
+            "result": "WRONG",
+            "is_win": False,
+            "winner": None,
+            "is_draw": False,
+        }
 
     def next_phase(self) -> Dict[str, Any]:
         # In this minimal v0.1, actions advance phases themselves.
         # next_phase finalizes WIN -> FINISHED only.
         last: List[Dict[str, Any]] = self._hist_dicts()[-2:]
+        status = self.state.status
+        phase = self.state.phase
         if self.state.phase == "WIN" and self.state.status == "WIN":
             self.state.status = "FINISHED"
             self.state.phase = "FINISHED"
             print("[GAME] finalized -> FINISHED")
+        elif self.state.phase == "DRAW" and self.state.status == "DRAW":
+            self.state.status = "FINISHED"
+            self.state.phase = "FINISHED"
+            print("[GAME] finalized -> DRAW/FINISHED")
         return {
-            "game_status": self.state.status,
+            "game_status": status,
             "current_turn": self.state.turn,
-            "phase": self.state.phase,
+            "phase": phase,
             "last_events": last,
         }
 
@@ -206,6 +260,16 @@ class GameManager:
             }
             for h in self.state.history
         ]
+
+    def _build_explanation(self) -> Optional[str]:
+        if not self.state.theme:
+            return None
+        parts = [self.state.theme.solution.strip()] if self.state.theme.solution else []
+        facts = self.state.theme.facts or []
+        if facts:
+            parts.append("補足: " + " / ".join(facts))
+        explanation = "\n".join(p for p in parts if p)
+        return explanation or None
 
 
 game_manager = GameManager()

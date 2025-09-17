@@ -34,6 +34,9 @@ class UserGuessRequest(BaseModel):
 class UserGuessResponse(BaseModel):
     result: Literal["CORRECT", "WRONG"]
     is_win: bool
+    winner: Optional[Literal["user", "ai"]] = None
+    explanation: Optional[str] = None
+    is_draw: Optional[bool] = None
 
 
 class AIQuestionResponse(BaseModel):
@@ -46,11 +49,14 @@ class AIGuessResponse(BaseModel):
     text: str
     result: Literal["CORRECT", "WRONG"]
     is_win: bool
+    winner: Optional[Literal["user", "ai"]] = None
+    explanation: Optional[str] = None
+    is_draw: Optional[bool] = None
 
 
 class QA(BaseModel):
-    actor: Literal["user", "ai"]
-    kind: Literal["question", "guess"]
+    actor: Literal["user", "ai", "mc"]
+    kind: Literal["question", "guess", "note"]
     text: Optional[str]
     pass_: bool = Field(alias="pass")
     judge: Optional[JudgeLiteral] = None
@@ -74,6 +80,7 @@ class GameStateSnapshot(BaseModel):
         "AI_MC_JUDGE",
         "IDLE",
         "WIN",
+        "DRAW",
         "FINISHED",
     ]
     history: List[QA]
@@ -82,7 +89,7 @@ class GameStateSnapshot(BaseModel):
 
 
 class NextTurnResponse(BaseModel):
-    game_status: Literal["IDLE", "THEME_SELECTED", "IN_TURN", "WIN", "FINISHED"]
+    game_status: Literal["IDLE", "THEME_SELECTED", "IN_TURN", "WIN", "DRAW", "FINISHED"]
     current_turn: int
     phase: GameStateSnapshot.__annotations__["phase"]  # type: ignore
     last_events: List[QA]

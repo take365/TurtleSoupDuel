@@ -17,6 +17,12 @@ type CharacterConfig = Record<string, any> & {
   initial_text?: string;
 };
 
+type ActorMeta = {
+  label: string;
+  icons: string[];
+  fallback: string;
+};
+
 export default function PlayPage({ params }: { params: { themeId: string } }) {
   const { themeId } = params;
   const searchParams = useSearchParams();
@@ -35,12 +41,17 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
   const [themeInfo, setThemeInfo] = useState<ThemeInfo | null>(null);
   const [themeError, setThemeError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
+  const [outcome, setOutcome] = useState<"user" | "ai" | "draw" | null>(null);
 
   const api = useMemo(() => getApiBase(), []);
 
   useEffect(() => {
     setCharId(initialChar);
   }, [initialChar]);
+
+  useEffect(() => {
+    setOutcome(null);
+  }, [themeId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +107,91 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
     return img ? `/characters/${charId}/${img}` : '';
   };
 
+  const characterIconCandidates = useMemo(() => {
+    const base = `/characters/${charId}/`;
+    const variants = new Set<string>();
+    const avatarName = typeof charConfig?.avatar === 'string' ? charConfig.avatar : '';
+    if (avatarName) {
+      variants.add(avatarName);
+    }
+    variants.add(`${charId}.png`);
+    variants.add(`${charId.toLowerCase()}.png`);
+    variants.add(`${charId.replace(/-/g, '_')}.png`);
+    variants.add(`${charId.replace(/_/g, '')}.png`);
+    variants.add(`${charId.replace(/^ja_/, '')}.png`);
+    const cfg = charConfig || {};
+    Object.values(cfg).forEach((val) => {
+      if (val && typeof val === 'object' && 'image' in val && typeof (val as any).image === 'string') {
+        variants.add((val as any).image as string);
+      }
+    });
+    return Array.from(variants)
+      .filter(Boolean)
+      .map((name) => `${base}${name}`);
+  }, [charId, charConfig]);
+
+  const userIconCandidates = useMemo(() => {
+    return [] as string[];
+  }, []);
+
+  const mcIconCandidates = useMemo(() => {
+    return Array.from(new Set([`/avatars/mc.png`, ...characterIconCandidates]));
+  }, [characterIconCandidates]);
+
+  const aiIconCandidates = useMemo(() => {
+    if (characterIconCandidates.length) return characterIconCandidates;
+    return ['/avatars/ai.png'];
+  }, [characterIconCandidates]);
+
+  const actorMeta = useMemo<Record<string, ActorMeta>>(() => {
+    return {
+      user: { label: 'ユーザー', icons: userIconCandidates, fallback: 'U' },
+      mc: { label: 'MC', icons: mcIconCandidates, fallback: 'MC' },
+      ai: { label: charConfig?.display_name || 'AI', icons: aiIconCandidates, fallback: 'AI' },
+      system: { label: 'システム', icons: [], fallback: 'S' },
+      default: { label: 'メッセージ', icons: [], fallback: '?' },
+    };
+  }, [aiIconCandidates, charConfig, mcIconCandidates, userIconCandidates]);
+
+  const Avatar = ({ actorKey, icons, fallback, title }: { actorKey: string; icons: string[]; fallback: string; title: string }) => {
+    const [index, setIndex] = useState<number>(0);
+    const prevKeyRef = useRef<string | null>(null);
+    useEffect(() => {
+      const key = `${actorKey}|${icons.join('|')}`;
+      if (prevKeyRef.current !== key) {
+        setIndex(0);
+        prevKeyRef.current = key;
+      }
+    }, [actorKey, icons]);
+    const src = index >= 0 ? icons[index] : undefined;
+    if (!src) {
+      return (
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-xs text-slate-500"
+          title={title}
+        >
+          {fallback}
+        </div>
+      );
+    }
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        key={`${actorKey}-${index}`}
+        src={src}
+        alt={actorKey}
+        className="h-10 w-10 border border-slate-200 object-cover bg-white"
+        title={title}
+        onError={() =>
+          setIndex((prev) => {
+            const next = prev + 1;
+            return next < icons.length ? next : -1;
+          })
+        }
+      />
+    );
+  };
+
   const pickFirstAvailable = (cands: string[], avail: string[]) => {
     for (const c of cands) if (avail.includes(c)) return c;
     if (avail.includes('平常心')) return '平常心';
@@ -119,10 +215,11 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
   const inferMoodFromEvents = (evs: Ev[], avail: string[]): string => {
     for (let i = evs.length - 1; i >= 0; i--) {
       const e = evs[i];
-      if (e.actor === 'MC' && e.kind === 'judge') {
+      const actorKey = (e.actor || '').toLowerCase();
+      if (actorKey === 'mc' && e.kind === 'judge') {
         return inferMoodFromText(e.text || '', avail);
       }
-      if (e.actor === 'system' && e.kind === 'note' && /phase=win/i.test(e.text || '')) {
+      if (actorKey === 'system' && e.kind === 'note' && /phase=win/i.test(e.text || '')) {
         return pickFirstAvailable(['喜び・勝利', '興味・前進'], avail);
       }
     }
@@ -147,9 +244,9 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
       if (prev.length) return prev;
       return [
         {
-          actor: 'system',
+          actor: 'mc',
           kind: 'note',
-          text: `テーマ「${themeInfo.title}」を開始しました`,
+          text: `それではテーマ「${themeInfo.title}」で勝負を開始します。`,
           turn: 1,
           phase: 'start',
         },
@@ -183,7 +280,7 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
       if (r.ok) {
         setEvents((p) => {
           const turn = p.at(-1)?.turn ?? 1;
-          return [...p, { actor: 'MC', kind: 'judge', text: `${j.judge}${j.note ? ` (${j.note})` : ''}`, turn, phase: 'MC_A' }];
+          return [...p, { actor: 'mc', kind: 'judge', text: `${j.judge}${j.note ? ` (${j.note})` : ''}`, turn, phase: 'MC_A' }];
         });
       }
     } catch {
@@ -201,7 +298,19 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
     try {
       const j = await r.json();
       if (r.ok) {
-        setEvents((p) => [...p, { actor: 'MC', kind: 'judge', text: j.result, turn: (p.at(-1)?.turn ?? 1), phase: 'MC_JUDGE' }]);
+        setEvents((p) => {
+          const turn = p.at(-1)?.turn ?? 1;
+          const next = [...p, { actor: 'mc', kind: 'judge', text: j.result, turn, phase: 'MC_JUDGE' }];
+          if (j.explanation) {
+            next.push({ actor: 'mc', kind: 'note', text: j.explanation, turn, phase: 'MC_EXPLAIN' });
+          }
+          return next;
+        });
+        if (j.is_win && j.winner === 'user') {
+          setOutcome('user');
+        } else if (j.is_draw) {
+          setOutcome('draw');
+        }
       }
     } catch {
       /* ignore */
@@ -219,7 +328,7 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
           const next = [...p, { actor: 'ai', kind: 'question', text: j.text, turn, phase: 'AI_Q' }];
           if (j.judge) {
             const note = j.note ? ` (${j.note})` : '';
-            next.push({ actor: 'MC', kind: 'judge', text: `${j.judge}${note}`, turn, phase: 'AI_MC_A' });
+            next.push({ actor: 'mc', kind: 'judge', text: `${j.judge}${note}`, turn, phase: 'AI_MC_A' });
           }
           return next;
         });
@@ -239,10 +348,18 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
           const turn = p.at(-1)?.turn ?? 1;
           const next = [...p, { actor: 'ai', kind: 'guess', text: j.text, turn, phase: 'AI_GUESS' }];
           if (j.result) {
-            next.push({ actor: 'MC', kind: 'judge', text: j.result, turn, phase: 'AI_MC_JUDGE' });
+            next.push({ actor: 'mc', kind: 'judge', text: j.result, turn, phase: 'AI_MC_JUDGE' });
+            if (j.explanation) {
+              next.push({ actor: 'mc', kind: 'note', text: j.explanation, turn, phase: 'MC_EXPLAIN' });
+            }
           }
           return next;
         });
+        if (j.is_win && j.winner === 'ai') {
+          setOutcome('ai');
+        } else if (j.is_draw) {
+          setOutcome('draw');
+        }
       }
     } catch {
       /* ignore */
@@ -257,6 +374,9 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
       if (r.ok) {
         setEvents((p) => [...p, { actor: 'system', kind: 'note', text: `phase=${j.phase} turn=${j.turn}`, turn: j.turn, phase: j.phase }]);
         setPhase(j.phase || '');
+        if (j.game_status === 'DRAW') {
+          setOutcome('draw');
+        }
       }
     } catch {
       /* ignore */
@@ -292,18 +412,79 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
     }
   };
 
+  const outcomeImages: Record<'user' | 'ai' | 'draw', string> = {
+    user: '/youwin.png',
+    ai: '/youlose.png',
+    draw: '/draw.png',
+  };
+
   return (
-    <main className="min-h-screen bg-slate-100 p-4 lg:p-6">
-      <div className="max-w-6xl mx-auto grid gap-6 lg:grid-cols-[2fr_minmax(0,1.15fr)]">
+    <>
+      <main className="min-h-screen bg-slate-100 p-4 lg:p-6">
+        <div className="max-w-6xl mx-auto grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_2fr]">
+          <aside className="space-y-4">
+            <div className="border rounded-lg bg-white p-4 space-y-3">
+              <h2 className="text-lg font-semibold">対戦キャラクター</h2>
+              <div className="text-sm text-slate-600">{charConfig?.display_name || charId}</div>
+            <div className="text-xs text-slate-500">感情（自動）: {selectedMood || '-'}</div>
+            {resolveImage() ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={resolveImage()} alt={selectedMood || '立ち絵'} className="w-full border bg-white" />
+            ) : (
+              <div className="border rounded p-4 text-center text-xs text-slate-400">立ち絵はありません</div>
+            )}
+          </div>
+          <div className="border rounded-lg bg-white p-4 space-y-4 text-sm">
+            <div className="space-y-2">
+              <div className="text-xl font-bold text-slate-800">{themeInfo?.title || '読み込み中…'}</div>
+              {themeError && <div className="text-sm text-red-600">{themeError}</div>}
+              <div className="text-slate-700 whitespace-pre-wrap">{themeInfo?.question || ''}</div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={liked ? unlike : like} className="border rounded px-3 py-2">
+                {liked ? 'いいね解除' : 'いいね'}
+              </button>
+              <button onClick={clear} className="border rounded px-3 py-2" disabled={cleared}>
+                {cleared ? 'クリア済み' : 'クリア記録'}
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <span>好感度{aff != null ? `: ${aff}` : ''}</span>
+              <button onClick={() => addAffinity(+5)} className="border rounded px-2 py-1">+5</button>
+              <button onClick={() => addAffinity(-5)} className="border rounded px-2 py-1">-5</button>
+            </div>
+          </div>
+        </aside>
         <section className="flex flex-col gap-4">
-          <div ref={logRef} className="flex-1 border rounded-lg bg-white p-4 overflow-auto max-h-[70vh]">
-            {events.map((ev, i) => (
-              <div key={`${ev.actor}-${ev.kind}-${i}`} className="mb-3">
-                <div className="text-xs text-slate-400">[{ev.turn}:{ev.phase}]</div>
-                <div className="font-semibold text-slate-700">{ev.actor}</div>
-                <div className="text-sm text-slate-800 whitespace-pre-wrap">{ev.text}</div>
-              </div>
-            ))}
+          <div ref={logRef} className="flex-1 border rounded-lg bg-white p-4 overflow-auto max-h-[70vh] space-y-3">
+            {events.map((ev, i) => {
+              const actorKey = (ev.actor || '').toLowerCase();
+              const meta = actorMeta[actorKey] || actorMeta.default;
+              const label = meta === actorMeta.default && ev.actor ? ev.actor : meta.label;
+              const isUser = actorKey === 'user';
+              const isMC = actorKey === 'mc';
+              const isAI = actorKey === 'ai';
+              const laneClass = ['flex', isUser ? 'justify-end pl-12' : 'justify-start pr-12'].join(' ');
+              const itemClass = ['flex items-start gap-3', isUser ? 'flex-row-reverse' : ''].join(' ');
+              const bubbleClass = [
+                'rounded-lg px-3 py-2 text-sm text-slate-800 whitespace-pre-wrap shadow-sm',
+                isUser
+                  ? 'bg-blue-100 text-right max-w-[70%] lg:max-w-[66%] ml-auto'
+                  : isMC
+                  ? 'bg-emerald-100 max-w-[72%]'
+                  : isAI
+                  ? 'bg-rose-100 max-w-[72%]'
+                  : 'bg-slate-100 max-w-[72%]'
+              ].join(' ');
+              return (
+                <div key={`${ev.actor}-${ev.kind}-${i}`} className={laneClass}>
+                  <div className={itemClass}>
+                    <Avatar actorKey={actorKey} icons={meta.icons} fallback={meta.fallback} title={label} />
+                    <div className={bubbleClass}>{ev.text}</div>
+                  </div>
+                </div>
+              );
+            })}
             {!events.length && <div className="text-sm text-slate-400">会話はまだありません。入力して開始してください。</div>}
           </div>
           <div className="border rounded-lg bg-white p-4 space-y-3">
@@ -323,44 +504,21 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
             </div>
           </div>
         </section>
-        <aside className="space-y-4">
-          <div className="border rounded-lg bg-white p-4 space-y-3">
-            <h2 className="text-lg font-semibold">問題情報</h2>
-            <div className="text-sm text-slate-600">ID: {themeInfo?.id || themeId}</div>
-            <div className="text-xl font-bold text-slate-800">{themeInfo?.title || '読み込み中…'}</div>
-            {themeError && <div className="text-sm text-red-600">{themeError}</div>}
-            <div className="text-sm text-slate-700 whitespace-pre-wrap">{themeInfo?.question || ''}</div>
-            <div className="text-xs text-slate-500">phase: {phase || '-'}</div>
-          </div>
-          <div className="border rounded-lg bg-white p-4 space-y-3">
-            <h2 className="text-lg font-semibold">キャラクター</h2>
-            <div className="text-sm text-slate-600">{charConfig?.display_name || charId}</div>
-            <div className="text-xs text-slate-500">感情（自動）: {selectedMood || '-'}</div>
-            {resolveImage() ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={resolveImage()} alt={selectedMood || '立ち絵'} className="w-full rounded border" />
-            ) : (
-              <div className="border rounded p-4 text-center text-xs text-slate-400">立ち絵はありません</div>
-            )}
-          </div>
-          <div className="border rounded-lg bg-white p-4 space-y-3 text-sm">
-            <div className="flex gap-2">
-              <button onClick={liked ? unlike : like} className="border rounded px-3 py-2">
-                {liked ? 'いいね解除' : 'いいね'}
-              </button>
-              <button onClick={clear} className="border rounded px-3 py-2" disabled={cleared}>
-                {cleared ? 'クリア済み' : 'クリア記録'}
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <span>好感度{aff != null ? `: ${aff}` : ''}</span>
-              <button onClick={() => addAffinity(+5)} className="border rounded px-2 py-1">+5</button>
-              <button onClick={() => addAffinity(-5)} className="border rounded px-2 py-1">-5</button>
-            </div>
-          </div>
-        </aside>
       </div>
-    </main>
+      </main>
+      {outcome && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm cursor-pointer"
+          onClick={() => setOutcome(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={outcomeImages[outcome]}
+            alt={outcome === 'draw' ? 'Draw' : outcome === 'user' ? 'You Win' : 'You Lose'}
+            className="max-w-[80vw] max-h-[80vh] drop-shadow-2xl"
+          />
+        </div>
+      )}
+    </>
   );
 }
-

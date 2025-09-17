@@ -104,7 +104,7 @@ export default function SelectionScreen({ themes }: Props) {
         )}
         <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
           <aside className="bg-white border rounded-lg p-4 space-y-4">
-            <h2 className="text-lg font-semibold">キャラクターを選択</h2>
+            <h2 className="text-lg font-semibold">対戦キャラクターを選択</h2>
             <div className="space-y-3">
               {CHARACTER_OPTIONS.map((c) => (
                 <button
