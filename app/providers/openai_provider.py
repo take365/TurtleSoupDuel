@@ -20,6 +20,18 @@ def _extract_json(text: str) -> Dict[str, Any]:
     return {}
 
 
+def _history_json(history: List[Dict[str, Any]], limit: int) -> str:
+    payload: List[Dict[str, Any]] = []
+    for h in history[-limit:]:
+        entry: Dict[str, Any] = {}
+        for key in ("actor", "kind", "text", "pass", "judge", "note", "result", "provider", "model"):
+            value = h.get(key)
+            if value not in (None, ""):
+                entry[key] = value
+        payload.append(entry)
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
 class OpenAILLMProvider(LLMProvider):
     def __init__(self, model: Optional[str] = None, role: str = "mc") -> None:
         from openai import OpenAI  # lazy import
@@ -90,12 +102,11 @@ class OpenAILLMProvider(LLMProvider):
             "あなたはAI対戦者です。情報利得が高く、重複しないYes/No質問を日本語で1つだけ出力してください。"
             "文以外の出力は禁止。"
         )
-        hist_lines: List[str] = []
-        for h in history[-10:]:
-            hist_lines.append(f"{h.get('actor')}:{h.get('kind')}:{(h.get('text') or '')[:50]}")
+        history_json = _history_json(history, limit=12)
         user = (
             f"題名: {theme.get('title')}\n問題: {theme.get('question')}\n"
-            f"履歴(要約):\n" + "\n".join(hist_lines)
+            "直近の履歴(JSON):\n"
+            f"{history_json}"
         )
         print(f"[LLM][OpenAI][ai_question] model={self.model}")
         resp = self.client.chat.completions.create(
@@ -118,14 +129,11 @@ class OpenAILLMProvider(LLMProvider):
             "あなたはAI対戦者です。これまでの履歴から導かれる最終解答を日本語で簡潔に1文で述べてください。"
             "文以外の出力は禁止。"
         )
-        hist_lines: List[str] = []
-        for h in history[-12:]:
-            hist_lines.append(
-                f"{h.get('actor')}:{h.get('kind')}:{(h.get('text') or '')[:50]} -> {h.get('judge') or h.get('result') or ''}"
-            )
+        history_json = _history_json(history, limit=14)
         user = (
             f"題名: {theme.get('title')}\n問題: {theme.get('question')}\n"
-            f"履歴(要約):\n" + "\n".join(hist_lines)
+            "直近の履歴(JSON):\n"
+            f"{history_json}"
         )
         print(f"[LLM][OpenAI][ai_guess] model={self.model}")
         resp = self.client.chat.completions.create(
