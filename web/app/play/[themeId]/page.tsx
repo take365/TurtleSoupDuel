@@ -521,7 +521,7 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
               const bubbleClass = [
                 'rounded-lg px-3 py-2 text-sm text-slate-800 whitespace-pre-wrap shadow-sm',
                 isUser
-                  ? 'bg-blue-100 text-right max-w-[70%] lg:max-w-[66%] ml-auto'
+                  ? 'bg-blue-100 text-left max-w-[70%] lg:max-w-[66%] ml-auto'
                   : isMC
                   ? 'bg-emerald-100 max-w-[72%]'
                   : isAI
