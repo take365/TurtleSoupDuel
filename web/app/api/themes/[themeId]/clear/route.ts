@@ -27,3 +27,23 @@ export async function POST(_: Request, { params }: { params: { themeId: string }
     return err('server_error', 'Unexpected error', e?.message, 500);
   }
 }
+
+export async function DELETE(_: Request, { params }: { params: { themeId: string } }) {
+  const { themeId } = params;
+  let cassandra;
+  try { cassandra = await getCassandra(); await cassandra.connect(); }
+  catch (e: any) { return err('db_unavailable', 'Database connection failed', e?.message, 500); }
+
+  let user; try { user = await ensureActiveUser(cassandra); } catch (r: any) { return r; }
+
+  try {
+    await cassandra.execute(
+      'DELETE FROM clears_by_user WHERE user_id=? AND theme_id=?',
+      [user.userId, themeId],
+      { prepare: true }
+    );
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return err('server_error', 'Unexpected error', e?.message, 500);
+  }
+}

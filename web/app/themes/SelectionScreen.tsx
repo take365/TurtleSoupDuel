@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { getApiBase } from '@/lib/api';
 
@@ -9,6 +10,7 @@ type ThemeItem = {
   title: string;
   snippet?: string;
   likes?: number;
+  liked?: boolean;
   cleared?: boolean;
 };
 
@@ -35,6 +37,12 @@ export default function SelectionScreen({ themes }: Props) {
   const [charImage, setCharImage] = useState<string>('');
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [items, setItems] = useState<ThemeItem[]>(themes);
+  const [hideCleared, setHideCleared] = useState(false);
+
+  useEffect(() => {
+    setItems(themes);
+  }, [themes]);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +95,72 @@ export default function SelectionScreen({ themes }: Props) {
     }
   };
 
+  const toggleCleared = async (themeId: string, cleared: boolean | undefined) => {
+    const nextState = !cleared;
+    setError(null);
+    try {
+      const r = await fetch(`/api/themes/${encodeURIComponent(themeId)}/clear`, {
+        method: nextState ? 'POST' : 'DELETE',
+      });
+      if (!r.ok && !(r.status === 409 && nextState)) {
+        throw new Error(`toggle_failed:${r.status}`);
+      }
+      setItems((prev) => prev.map((t) => (t.themeId === themeId ? { ...t, cleared: nextState } : t)));
+    } catch (e: any) {
+      setError(e?.message ? `クリア状態の更新に失敗しました (${e.message})` : 'クリア状態の更新に失敗しました');
+    }
+  };
+
+  useEffect(() => {
+    if (!hideCleared) return;
+    if (!selectedTheme) return;
+    const current = items.find((t) => t.themeId === selectedTheme);
+    if (current && current.cleared) {
+      setSelectedTheme(null);
+    }
+  }, [hideCleared, items, selectedTheme]);
+
+  const toggleLiked = async (themeId: string, liked: boolean | undefined) => {
+    const nextState = !liked;
+    setError(null);
+    try {
+      const endpoint = nextState ? 'like' : 'unlike';
+      const r = await fetch(`/api/themes/${encodeURIComponent(themeId)}/${endpoint}`, {
+        method: 'POST',
+      });
+      if (!r.ok) throw new Error(`like_toggle_failed:${r.status}`);
+      let updated = false;
+      try {
+        const j = await r.json();
+        updated = Boolean(j?.updated);
+      } catch {}
+      setItems((prev) => prev.map((t) => {
+        if (t.themeId !== themeId) return t;
+        const currentLikes = typeof t.likes === 'number' ? t.likes : 0;
+        const nextLikes = updated
+          ? Math.max(0, currentLikes + (nextState ? 1 : -1))
+          : currentLikes;
+        return { ...t, liked: nextState, likes: nextLikes };
+      }));
+    } catch (e: any) {
+      setError(e?.message ? `いいね状態の更新に失敗しました (${e.message})` : 'いいね状態の更新に失敗しました');
+    }
+  };
+
+  const handleLikedKey = (event: KeyboardEvent<HTMLSpanElement>, themeId: string, liked: boolean | undefined) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggleLiked(themeId, liked);
+    }
+  };
+
+  const handleClearedKey = (event: KeyboardEvent<HTMLSpanElement>, themeId: string, cleared: boolean | undefined) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggleCleared(themeId, cleared);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-slate-100 p-6">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -126,26 +200,90 @@ export default function SelectionScreen({ themes }: Props) {
             </div>
           </aside>
           <section className="bg-white border rounded-lg p-4">
-            <h2 className="text-lg font-semibold mb-4">テーマを選択</h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {themes.map((t) => {
-                const selected = selectedTheme === t.themeId;
-                return (
-                  <button
-                    key={t.themeId}
-                    onClick={() => setSelectedTheme(t.themeId)}
+            <div className="flex items-center justify-between mb-4 gap-3">
+              <h2 className="text-lg font-semibold">テーマを選択</h2>
+              <button
+                onClick={() => setHideCleared((prev) => !prev)}
+                className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition ${hideCleared ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-slate-200 hover:bg-slate-50 text-slate-600'}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/crear.png"
+                  alt="クリア済みアイコン"
+                  className="h-4 w-4"
+                />
+                <span>{hideCleared ? 'クリア済みを表示' : 'クリア済みを隠す'}</span>
+              </button>
+            </div>
+            {hideCleared && items.filter((t) => !t.cleared).length === 0 ? (
+              <div className="text-sm text-slate-500 border rounded px-3 py-6 text-center">
+                クリア済みでないテーマはありません。
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {items.filter((t) => !hideCleared || !t.cleared).map((t) => {
+                  const selected = selectedTheme === t.themeId;
+                  return (
+                    <button
+                      key={t.themeId}
+                      onClick={() => setSelectedTheme(t.themeId)}
                     className={`text-left border rounded-lg p-4 transition h-full ${selected ? 'border-purple-500 bg-purple-50 shadow-sm' : 'border-slate-200 hover:bg-slate-50'}`}
                   >
                     <div className="text-sm font-semibold mb-1">{t.title}</div>
                     <div className="text-xs text-slate-500 h-12 overflow-hidden">{t.snippet}</div>
-                    <div className="mt-3 text-[11px] text-slate-400 flex gap-3">
-                      <span>likes: {t.likes ?? '-'}</span>
-                      <span>cleared: {t.cleared ? 'Yes' : 'No'}</span>
+                    <div className="mt-3 text-[11px] text-slate-400 flex items-center gap-4">
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className="inline-flex h-6 w-6 items-center justify-center"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleLiked(t.themeId, t.liked);
+                        }}
+                        onKeyDown={(event) => {
+                          event.stopPropagation();
+                          handleLikedKey(event, t.themeId, t.liked);
+                        }}
+                        aria-pressed={Boolean(t.liked)}
+                        aria-label={t.liked ? 'いいねを解除' : 'いいねする'}
+                        title={t.liked ? 'いいね解除' : 'いいね'}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={t.liked ? '/good.png' : '/nogood.png'}
+                          alt={t.liked ? 'いいね済み' : '未いいね'}
+                          className="h-6 w-6"
+                        />
+                      </span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className="inline-flex h-6 w-6 items-center justify-center"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleCleared(t.themeId, t.cleared);
+                        }}
+                        onKeyDown={(event) => {
+                          event.stopPropagation();
+                          handleClearedKey(event, t.themeId, t.cleared);
+                        }}
+                        aria-pressed={Boolean(t.cleared)}
+                        aria-label={t.cleared ? 'クリア済みを解除' : 'クリアとして記録'}
+                        title={t.cleared ? 'クリア済み' : '未クリア'}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={t.cleared ? '/crear.png' : '/nocrear.png'}
+                          alt={t.cleared ? 'クリア済み' : '未クリア'}
+                          className="h-6 w-6"
+                        />
+                      </span>
                     </div>
                   </button>
                 );
-              })}
-            </div>
+                })}
+              </div>
+            )}
           </section>
         </div>
       </div>

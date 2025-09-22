@@ -269,6 +269,33 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
     refreshState();
   }, [refreshState]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadProgress = async () => {
+      try {
+        const r = await fetch('/api/themes', { cache: 'no-store' });
+        if (!r.ok) return;
+        const list = await r.json();
+        if (!Array.isArray(list) || cancelled) return;
+        const entry = list.find((item: any) => item?.themeId === themeId);
+        if (entry) {
+          if (typeof entry.cleared === 'boolean') {
+            setCleared(entry.cleared);
+          }
+          if (typeof entry.liked === 'boolean') {
+            setLiked(entry.liked);
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    loadProgress();
+    return () => {
+      cancelled = true;
+    };
+  }, [themeId]);
+
   const sendUserQuestionLLM = async () => {
     const text = input.trim();
     if (!text) return;
@@ -383,19 +410,24 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
     }
   };
 
-  const like = async () => {
-    const r = await fetch(`/api/themes/${encodeURIComponent(themeId)}/like`, { method: 'POST' });
-    if (r.ok) setLiked(true);
+  const toggleLike = async () => {
+    const endpoint = liked ? 'unlike' : 'like';
+    const r = await fetch(`/api/themes/${encodeURIComponent(themeId)}/${endpoint}`, { method: 'POST' });
+    if (r.ok) {
+      setLiked(!liked);
+    }
   };
 
-  const unlike = async () => {
-    const r = await fetch(`/api/themes/${encodeURIComponent(themeId)}/unlike`, { method: 'POST' });
-    if (r.ok) setLiked(false);
-  };
-
-  const clear = async () => {
-    const r = await fetch(`/api/themes/${encodeURIComponent(themeId)}/clear`, { method: 'POST' });
-    if (r.ok) setCleared(true);
+  const toggleCleared = async () => {
+    const method = cleared ? 'DELETE' : 'POST';
+    const r = await fetch(`/api/themes/${encodeURIComponent(themeId)}/clear`, { method });
+    if (r.ok) {
+      setCleared(!cleared);
+      return;
+    }
+    if (!cleared && r.status === 409) {
+      setCleared(true);
+    }
   };
 
   const addAffinity = async (d: number) => {
@@ -441,11 +473,31 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
               <div className="text-slate-700 whitespace-pre-wrap">{themeInfo?.question || ''}</div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button onClick={liked ? unlike : like} className="border rounded px-3 py-2">
-                {liked ? 'いいね解除' : 'いいね'}
+              <button
+                onClick={toggleLike}
+                className="border rounded px-3 py-2"
+                aria-label={liked ? 'いいねを解除' : 'いいねする'}
+                title={liked ? 'いいね解除' : 'いいね'}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={liked ? '/good.png' : '/nogood.png'}
+                  alt={liked ? 'いいね済み' : '未いいね'}
+                  className="h-6 w-6"
+                />
               </button>
-              <button onClick={clear} className="border rounded px-3 py-2" disabled={cleared}>
-                {cleared ? 'クリア済み' : 'クリア記録'}
+              <button
+                onClick={toggleCleared}
+                className="border rounded px-3 py-2"
+                aria-label={cleared ? 'クリア済みを解除' : 'クリアとして記録'}
+                title={cleared ? 'クリア済み' : '未クリア'}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={cleared ? '/crear.png' : '/nocrear.png'}
+                  alt={cleared ? 'クリア済み' : '未クリア'}
+                  className="h-6 w-6"
+                />
               </button>
             </div>
             <div className="flex items-center gap-2">

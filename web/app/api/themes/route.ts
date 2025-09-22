@@ -15,8 +15,8 @@ export async function GET() {
     // Fallback sample when DB not reachable
     // NOTE: バックエンドのthemes/に存在するIDに合わせる
     return NextResponse.json([
-      { themeId: 'warewareda-0001', title: '２０cm', snippet: '盆栽を一日平均計２０cm移動させる男。なぜ？', likes: 0, cleared: false },
-      { themeId: 'warewareda-0002', title: '好奇心', snippet: '自分の寿命を知りたくなった男は死んだ。なぜ？', likes: 0, cleared: false },
+      { themeId: 'warewareda-0001', title: '２０cm', snippet: '盆栽を一日平均計２０cm移動させる男。なぜ？', likes: 0, cleared: false, liked: false },
+      { themeId: 'warewareda-0002', title: '好奇心', snippet: '自分の寿命を知りたくなった男は死んだ。なぜ？', likes: 0, cleared: false, liked: false },
     ]);
   }
 
@@ -26,8 +26,8 @@ export async function GET() {
     if (!rows.length) {
       // DBが空の場合も同様に既存テーマのIDを返す
       return NextResponse.json([
-        { themeId: 'warewareda-0001', title: '２０cm', snippet: '盆栽を一日平均計２０cm移動させる男。なぜ？', likes: 0, cleared: false },
-        { themeId: 'warewareda-0002', title: '好奇心', snippet: '自分の寿命を知りたくなった男は死んだ。なぜ？', likes: 0, cleared: false },
+        { themeId: 'warewareda-0001', title: '２０cm', snippet: '盆栽を一日平均計２０cm移動させる男。なぜ？', likes: 0, cleared: false, liked: false },
+        { themeId: 'warewareda-0002', title: '好奇心', snippet: '自分の寿命を知りたくなった男は死んだ。なぜ？', likes: 0, cleared: false, liked: false },
       ]);
     }
     const userId = await getUserIdFromCookie(cassandra);
@@ -44,13 +44,18 @@ export async function GET() {
       } catch {}
       // cleared for current user
       let cleared = false;
+      let liked = false;
       if (userId) {
         try {
           const rr = await cassandra.execute('SELECT theme_id FROM clears_by_user WHERE user_id=? AND theme_id=?', [userId, themeId], { prepare: true });
           cleared = rr.rowLength > 0;
         } catch {}
+        try {
+          const rl = await cassandra.execute('SELECT theme_id FROM likes_by_user WHERE user_id=? AND theme_id=?', [userId, themeId], { prepare: true });
+          liked = rl.rowLength > 0;
+        } catch {}
       }
-      data.push({ themeId, title, snippet, likes, cleared });
+      data.push({ themeId, title, snippet, likes, cleared, liked });
     }
     return NextResponse.json(data);
   } catch (e: any) {
