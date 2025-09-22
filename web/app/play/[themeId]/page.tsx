@@ -67,6 +67,7 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
   }, [themeId]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
     };
