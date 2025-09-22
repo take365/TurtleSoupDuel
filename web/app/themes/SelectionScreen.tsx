@@ -41,6 +41,25 @@ export default function SelectionScreen({ themes }: Props) {
   const [hideCleared, setHideCleared] = useState(false);
 
   useEffect(() => {
+    try {
+      const stored = localStorage.getItem('turtlesoupduel:hide-cleared');
+      if (stored === 'true') {
+        setHideCleared(true);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('turtlesoupduel:hide-cleared', hideCleared ? 'true' : 'false');
+    } catch {
+      /* ignore */
+    }
+  }, [hideCleared]);
+
+  useEffect(() => {
     setItems(themes);
   }, [themes]);
 
