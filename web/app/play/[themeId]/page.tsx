@@ -50,6 +50,7 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
   const [themeInfo, setThemeInfo] = useState<ThemeInfo | null>(null);
   const [themeError, setThemeError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
+  const isMountedRef = useRef(true);
   const [outcome, setOutcome] = useState<"user" | "ai" | "draw" | null>(null);
 
   const api = useMemo(() => getApiBase(), []);
@@ -64,6 +65,12 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
     setTurn(1);
     setAutoProcessing(false);
   }, [themeId]);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -488,7 +495,6 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
   useEffect(() => {
     if (autoProcessing) return;
     if (phase !== 'AI_Q' && phase !== 'AI_GUESS') return;
-    let cancelled = false;
     const run = async () => {
       setAutoProcessing(true);
       try {
@@ -498,15 +504,12 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
           await aiGuessLLM();
         }
       } finally {
-        if (!cancelled) {
+        if (isMountedRef.current) {
           setAutoProcessing(false);
         }
       }
     };
     run();
-    return () => {
-      cancelled = true;
-    };
   }, [aiGuessLLM, aiQuestionLLM, autoProcessing, phase]);
 
   const toggleLike = async () => {
