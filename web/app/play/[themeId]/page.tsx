@@ -40,6 +40,9 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
   const [cleared, setCleared] = useState(false);
   const [aff, setAff] = useState<number | null>(null);
   const [phase, setPhase] = useState<string>('');
+  const [turn, setTurn] = useState<number>(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [autoProcessing, setAutoProcessing] = useState(false);
   const [charId, setCharId] = useState<string>(initialChar);
   const [charConfig, setCharConfig] = useState<CharacterConfig | null>(null);
   const [moods, setMoods] = useState<string[]>([]);
@@ -47,6 +50,7 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
   const [themeInfo, setThemeInfo] = useState<ThemeInfo | null>(null);
   const [themeError, setThemeError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
+  const isMountedRef = useRef(true);
   const [outcome, setOutcome] = useState<"user" | "ai" | "draw" | null>(null);
 
   const api = useMemo(() => getApiBase(), []);
@@ -57,7 +61,17 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
 
   useEffect(() => {
     setOutcome(null);
+    setPhase('');
+    setTurn(1);
+    setAutoProcessing(false);
   }, [themeId]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -274,8 +288,13 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
       if (!r.ok) throw new Error('state_failed');
       const j = await r.json();
       setPhase(j.phase || '');
+      if (typeof j.turn === 'number' && j.turn > 0) {
+        setTurn(j.turn);
+      }
+      return j;
     } catch {
       /* ignore */
+      return null;
     }
   }, [api]);
 
@@ -310,119 +329,189 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
     };
   }, [themeId]);
 
-  const sendUserQuestionLLM = async () => {
+  const sendUserQuestionLLM = useCallback(async () => {
+    if (phase !== 'USER_Q' || isSubmitting) return;
     const text = input.trim();
     if (!text) return;
+    setIsSubmitting(true);
     setInput('');
-    setEvents((p) => [...p, { actor: 'user', kind: 'question', text, turn: (p.at(-1)?.turn ?? 1), phase: 'USER_Q' }]);
-    const r = await fetch(`${api}/game/user/question`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+    setEvents((p) => {
+      const currentTurn = turn || (p.at(-1)?.turn ?? 1);
+      return [...p, { actor: 'user', kind: 'question', text, turn: currentTurn, phase: 'USER_Q' }];
+    });
     try {
-      const j = await r.json();
-      if (r.ok) {
-        setEvents((p) => {
-          const turn = p.at(-1)?.turn ?? 1;
-          return [...p, { actor: 'mc', kind: 'judge', text: `${j.judge}${j.note ? ` (${j.note})` : ''}`, turn, phase: 'MC_A' }];
-        });
-      }
-    } catch {
-      /* ignore */
-    }
-    await refreshState();
-  };
-
-  const sendUserGuessLLM = async () => {
-    const text = input.trim();
-    if (!text) return;
-    setInput('');
-    setEvents((p) => [...p, { actor: 'user', kind: 'guess', text, turn: (p.at(-1)?.turn ?? 1), phase: 'USER_GUESS' }]);
-    const r = await fetch(`${api}/game/user/guess`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
-    try {
-      const j = await r.json();
-      if (r.ok) {
-        setEvents((p) => {
-          const turn = p.at(-1)?.turn ?? 1;
-          const next = [...p, { actor: 'mc', kind: 'judge', text: formatJudgeResult(j.result), turn, phase: 'MC_JUDGE' }];
-          if (j.explanation) {
-            next.push({ actor: 'mc', kind: 'note', text: j.explanation, turn, phase: 'MC_EXPLAIN' });
-          }
-          return next;
-        });
-        if (j.is_win && j.winner === 'user') {
-          setOutcome('user');
-        } else if (j.is_draw) {
-          setOutcome('draw');
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-    await refreshState();
-  };
-
-  const aiQuestionLLM = async () => {
-    const r = await fetch(`${api}/game/ai/question`, { method: 'POST' });
-    try {
-      const j = await r.json();
-      if (r.ok) {
-        setEvents((p) => {
-          const turn = p.at(-1)?.turn ?? 1;
-          const next = [...p, { actor: 'ai', kind: 'question', text: j.text, turn, phase: 'AI_Q' }];
-          if (j.judge) {
+      const r = await fetch(`${api}/game/user/question`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      try {
+        const j = await r.json();
+        if (r.ok) {
+          setEvents((p) => {
+            const currentTurn = turn || (p.at(-1)?.turn ?? 1);
+            const judge = j.judge ?? '';
             const note = j.note ? ` (${j.note})` : '';
-            next.push({ actor: 'mc', kind: 'judge', text: `${j.judge}${note}`, turn, phase: 'AI_MC_A' });
-          }
-          return next;
-        });
+            return [
+              ...p,
+              {
+                actor: 'mc',
+                kind: 'judge',
+                text: `${judge}${note}`,
+                turn: currentTurn,
+                phase: 'MC_A',
+              },
+            ];
+          });
+          setPhase('USER_GUESS');
+        }
+      } catch {
+        /* ignore */
       }
     } catch {
       /* ignore */
     }
     await refreshState();
-  };
+    setIsSubmitting(false);
+  }, [api, input, isSubmitting, phase, refreshState, turn]);
 
-  const aiGuessLLM = async () => {
-    const r = await fetch(`${api}/game/ai/guess`, { method: 'POST' });
+  const sendUserGuessLLM = useCallback(async () => {
+    if (phase !== 'USER_GUESS' || isSubmitting) return;
+    const text = input.trim();
+    if (!text) return;
+    setIsSubmitting(true);
+    setInput('');
+    setEvents((p) => {
+      const currentTurn = turn || (p.at(-1)?.turn ?? 1);
+      return [...p, { actor: 'user', kind: 'guess', text, turn: currentTurn, phase: 'USER_GUESS' }];
+    });
     try {
-      const j = await r.json();
-      if (r.ok) {
-        setEvents((p) => {
-          const turn = p.at(-1)?.turn ?? 1;
-          const next = [...p, { actor: 'ai', kind: 'guess', text: j.text, turn, phase: 'AI_GUESS' }];
-          if (j.result) {
-            next.push({ actor: 'mc', kind: 'judge', text: formatJudgeResult(j.result), turn, phase: 'AI_MC_JUDGE' });
+      const r = await fetch(`${api}/game/user/guess`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      try {
+        const j = await r.json();
+        if (r.ok) {
+          setEvents((p) => {
+            const currentTurn = turn || (p.at(-1)?.turn ?? 1);
+            const next = [
+              ...p,
+              {
+                actor: 'mc',
+                kind: 'judge',
+                text: formatJudgeResult(j.result),
+                turn: currentTurn,
+                phase: 'MC_JUDGE',
+              },
+            ];
             if (j.explanation) {
-              next.push({ actor: 'mc', kind: 'note', text: j.explanation, turn, phase: 'MC_EXPLAIN' });
+              next.push({ actor: 'mc', kind: 'note', text: j.explanation, turn: currentTurn, phase: 'MC_EXPLAIN' });
             }
+            return next;
+          });
+          if (j.is_win && j.winner === 'user') {
+            setOutcome('user');
+            setPhase('WIN');
+          } else if (j.is_draw) {
+            setOutcome('draw');
+            setPhase('DRAW');
+          } else {
+            setPhase('AI_Q');
           }
-          return next;
-        });
-        if (j.is_win && j.winner === 'ai') {
-          setOutcome('ai');
-        } else if (j.is_draw) {
-          setOutcome('draw');
         }
+      } catch {
+        /* ignore */
       }
     } catch {
       /* ignore */
     }
     await refreshState();
-  };
+    setIsSubmitting(false);
+  }, [api, input, isSubmitting, phase, refreshState, turn]);
 
-  const nextTurnLLM = async () => {
-    const r = await fetch(`${api}/game/next`, { method: 'POST' });
+  const aiQuestionLLM = useCallback(async () => {
     try {
-      const j = await r.json();
-      if (r.ok) {
-        setEvents((p) => [...p, { actor: 'system', kind: 'note', text: `phase=${j.phase} turn=${j.turn}`, turn: j.turn, phase: j.phase }]);
-        setPhase(j.phase || '');
-        if (j.game_status === 'DRAW') {
-          setOutcome('draw');
+      const r = await fetch(`${api}/game/ai/question`, { method: 'POST' });
+      try {
+        const j = await r.json();
+        if (r.ok) {
+          setEvents((p) => {
+            const currentTurn = turn || (p.at(-1)?.turn ?? 1);
+            const next = [...p, { actor: 'ai', kind: 'question', text: j.text, turn: currentTurn, phase: 'AI_Q' }];
+            if (j.judge) {
+              const note = j.note ? ` (${j.note})` : '';
+              next.push({ actor: 'mc', kind: 'judge', text: `${j.judge}${note}`, turn: currentTurn, phase: 'AI_MC_A' });
+            }
+            return next;
+          });
+          setPhase('AI_GUESS');
         }
+      } catch {
+        /* ignore */
       }
     } catch {
       /* ignore */
     }
-  };
+    await refreshState();
+  }, [api, refreshState, turn]);
+
+  const aiGuessLLM = useCallback(async () => {
+    try {
+      const r = await fetch(`${api}/game/ai/guess`, { method: 'POST' });
+      try {
+        const j = await r.json();
+        if (r.ok) {
+          setEvents((p) => {
+            const currentTurn = turn || (p.at(-1)?.turn ?? 1);
+            const next = [...p, { actor: 'ai', kind: 'guess', text: j.text, turn: currentTurn, phase: 'AI_GUESS' }];
+            if (j.result) {
+              next.push({ actor: 'mc', kind: 'judge', text: formatJudgeResult(j.result), turn: currentTurn, phase: 'AI_MC_JUDGE' });
+              if (j.explanation) {
+                next.push({ actor: 'mc', kind: 'note', text: j.explanation, turn: currentTurn, phase: 'MC_EXPLAIN' });
+              }
+            }
+            return next;
+          });
+          if (j.is_win && j.winner === 'ai') {
+            setOutcome('ai');
+            setPhase('WIN');
+          } else if (j.is_draw) {
+            setOutcome('draw');
+            setPhase('DRAW');
+          } else {
+            setPhase('USER_Q');
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    } catch {
+      /* ignore */
+    }
+    await refreshState();
+  }, [api, refreshState, turn]);
+
+  useEffect(() => {
+    if (autoProcessing) return;
+    if (phase !== 'AI_Q' && phase !== 'AI_GUESS') return;
+    const run = async () => {
+      setAutoProcessing(true);
+      try {
+        if (phase === 'AI_Q') {
+          await aiQuestionLLM();
+        } else if (phase === 'AI_GUESS') {
+          await aiGuessLLM();
+        }
+      } finally {
+        if (isMountedRef.current) {
+          setAutoProcessing(false);
+        }
+      }
+    };
+    run();
+  }, [aiGuessLLM, aiQuestionLLM, autoProcessing, phase]);
 
   const toggleLike = async () => {
     const endpoint = liked ? 'unlike' : 'like';
@@ -562,11 +651,20 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
               onChange={(e) => setInput(e.target.value)}
             />
             <div className="flex flex-wrap gap-2 text-sm">
-              <button onClick={sendUserQuestionLLM} className="border rounded px-3 py-2 bg-blue-600 text-white">質問として送信</button>
-              <button onClick={sendUserGuessLLM} className="border rounded px-3 py-2 bg-emerald-600 text-white">最終解答として送信</button>
-              <button onClick={aiQuestionLLM} className="border rounded px-3 py-2">AIに質問させる</button>
-              <button onClick={aiGuessLLM} className="border rounded px-3 py-2">AIに解答させる</button>
-              <button onClick={nextTurnLLM} className="border rounded px-3 py-2">次のターンへ</button>
+              <button
+                onClick={sendUserQuestionLLM}
+                disabled={phase !== 'USER_Q' || isSubmitting || autoProcessing}
+                className="border rounded px-3 py-2 bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                質問として送信
+              </button>
+              <button
+                onClick={sendUserGuessLLM}
+                disabled={phase !== 'USER_GUESS' || isSubmitting || autoProcessing}
+                className="border rounded px-3 py-2 bg-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                最終解答として送信
+              </button>
             </div>
           </div>
         </section>
