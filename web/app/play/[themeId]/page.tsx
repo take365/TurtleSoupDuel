@@ -295,30 +295,6 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
   }, [refreshState]);
 
   useEffect(() => {
-    if (autoProcessing) return;
-    if (phase !== 'AI_Q' && phase !== 'AI_GUESS') return;
-    let cancelled = false;
-    const run = async () => {
-      setAutoProcessing(true);
-      try {
-        if (phase === 'AI_Q') {
-          await aiQuestionLLM();
-        } else if (phase === 'AI_GUESS') {
-          await aiGuessLLM();
-        }
-      } finally {
-        if (!cancelled) {
-          setAutoProcessing(false);
-        }
-      }
-    };
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [aiGuessLLM, aiQuestionLLM, autoProcessing, phase]);
-
-  useEffect(() => {
     let cancelled = false;
     const loadProgress = async () => {
       try {
@@ -508,6 +484,30 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
     }
     await refreshState();
   }, [api, refreshState, turn]);
+
+  useEffect(() => {
+    if (autoProcessing) return;
+    if (phase !== 'AI_Q' && phase !== 'AI_GUESS') return;
+    let cancelled = false;
+    const run = async () => {
+      setAutoProcessing(true);
+      try {
+        if (phase === 'AI_Q') {
+          await aiQuestionLLM();
+        } else if (phase === 'AI_GUESS') {
+          await aiGuessLLM();
+        }
+      } finally {
+        if (!cancelled) {
+          setAutoProcessing(false);
+        }
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [aiGuessLLM, aiQuestionLLM, autoProcessing, phase]);
 
   const toggleLike = async () => {
     const endpoint = liked ? 'unlike' : 'like';
