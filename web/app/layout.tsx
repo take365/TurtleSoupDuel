@@ -1,6 +1,6 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import { headers, cookies } from 'next/headers';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 export const metadata: Metadata = {
@@ -26,6 +26,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       redirect('/');
     }
 
+    let usageData: any = null;
+    const limit = Number(process.env.NEXT_PUBLIC_DAILY_CALL_LIMIT || 100);
+    let used = 0;
+    try {
+      const r = await fetch(`${base}/api/me/usage`, { cache: 'no-store', headers: { cookie: hdrs.get('cookie') || '' } });
+      if (r.ok) usageData = await r.json();
+    } catch {}
+    if (usageData && typeof usageData.today?.calls === 'number') {
+      used = Number(usageData.today.calls);
+    }
+    const showUsage = !!usageData;
+
     return (
       <div className="w-full border-b bg-white">
         <div className="max-w-5xl mx-auto px-4 h-12 flex items-center gap-4">
@@ -43,47 +55,29 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <a href="/admin/users" className="text-sm text-gray-700 hover:underline">Admin Users</a>
             </>
           )}
-          <div className="ml-auto flex items-center gap-3">
-            {!me && (
-              <>
-                <a href="/login" className="text-sm text-blue-700 hover:underline">Login</a>
-                <a href="/signup" className="text-sm text-blue-700 hover:underline">Signup</a>
-              </>
+          <div className="ml-auto flex items-center gap-4">
+            {showUsage && (
+              <div className="flex items-center gap-2 text-sm text-gray-700">
+                <span>今日の使用: {used} / {limit}</span>
+                <a className="text-xs text-gray-500 underline" href="/me">詳細</a>
+              </div>
             )}
-            {me && (
-              <>
-                <a href="/me" className="text-sm text-gray-700 hover:underline">Me</a>
-                {/* @ts-expect-error Server Action */}
-                <form action={logout}><button className="text-sm text-gray-700 underline" type="submit">Logout</button></form>
-              </>
-            )}
+            <div className="flex items-center gap-3">
+              {!me && (
+                <>
+                  <a href="/login" className="text-sm text-blue-700 hover:underline">Login</a>
+                  <a href="/signup" className="text-sm text-blue-700 hover:underline">Signup</a>
+                </>
+              )}
+              {me && (
+                <>
+                  <a href="/me" className="text-sm text-gray-700 hover:underline">Me</a>
+                  {/* @ts-expect-error Server Action */}
+                  <form action={logout}><button className="text-sm text-gray-700 underline" type="submit">Logout</button></form>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
-    );
-  }
-  async function UsageBar() {
-    const hdrs = headers();
-    const host = hdrs.get('x-forwarded-host') || hdrs.get('host');
-    const proto = hdrs.get('x-forwarded-proto') || 'http';
-    const base = host ? `${proto}://${host}` : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000');
-    let data: any = null;
-    try {
-      const r = await fetch(`${base}/api/me/usage`, { cache: 'no-store', headers: { cookie: hdrs.get('cookie') || '' } });
-      if (r.ok) data = await r.json();
-    } catch {}
-    const limit = Number(process.env.NEXT_PUBLIC_DAILY_CALL_LIMIT || 100);
-    const used = Number(data?.today?.calls || 0);
-    const ratio = Math.max(0, Math.min(1, used / Math.max(1, limit)));
-    if (!data) return null;
-    return (
-      <div className="w-full bg-gray-100 border-b">
-        <div className="max-w-5xl mx-auto px-4 py-2 text-sm flex items-center gap-3">
-          <div className="w-48 h-2 bg-white rounded border">
-            <div className="h-2 bg-green-600 rounded" style={{ width: `${ratio * 100}%` }} />
-          </div>
-          <div className="text-gray-700">今日の使用: {used} / {limit}</div>
-          <div className="ml-auto text-xs text-gray-500"><a className="underline" href="/me">詳細</a></div>
         </div>
       </div>
     );
@@ -93,9 +87,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {/* @ts-expect-error Async Server Component */}
         <NavBar />
-        {/* 認証済みなら使用量メーターを表示（未認証なら非表示） */}
-        {/* @ts-expect-error Async Server Component */}
-        <UsageBar />
         {children}
       </body>
     </html>

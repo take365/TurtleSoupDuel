@@ -6,6 +6,12 @@ import { getApiBase } from '@/lib/api';
 
 type Ev = { actor: string; kind: string; text: string; turn: number; phase: string };
 
+const formatJudgeResult = (result: string | null | undefined): string => {
+  if (result === 'CORRECT') return 'おめでとうございます！正解です。';
+  if (result === 'WRONG') return '残念違います。';
+  return result || '';
+};
+
 type ThemeInfo = {
   id: string;
   title: string;
@@ -206,7 +212,15 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
     if (t.includes('おしい')) {
       return pickFirstAvailable(['惜しい・再考'], avail);
     }
-    if (t.includes('no') || t.includes('wrong') || t.includes('不適切') || t.includes('いいえ') || t.includes('不正解') || t.includes('間違')) {
+    if (
+      t.includes('no') ||
+      t.includes('wrong') ||
+      t.includes('不適切') ||
+      t.includes('いいえ') ||
+      t.includes('不正解') ||
+      t.includes('間違') ||
+      t.includes('違います')
+    ) {
       return pickFirstAvailable(['厳格・注意', '否定・落胆'], avail);
     }
     return pickFirstAvailable(['平常心'], avail);
@@ -327,7 +341,7 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
       if (r.ok) {
         setEvents((p) => {
           const turn = p.at(-1)?.turn ?? 1;
-          const next = [...p, { actor: 'mc', kind: 'judge', text: j.result, turn, phase: 'MC_JUDGE' }];
+          const next = [...p, { actor: 'mc', kind: 'judge', text: formatJudgeResult(j.result), turn, phase: 'MC_JUDGE' }];
           if (j.explanation) {
             next.push({ actor: 'mc', kind: 'note', text: j.explanation, turn, phase: 'MC_EXPLAIN' });
           }
@@ -375,7 +389,7 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
           const turn = p.at(-1)?.turn ?? 1;
           const next = [...p, { actor: 'ai', kind: 'guess', text: j.text, turn, phase: 'AI_GUESS' }];
           if (j.result) {
-            next.push({ actor: 'mc', kind: 'judge', text: j.result, turn, phase: 'AI_MC_JUDGE' });
+            next.push({ actor: 'mc', kind: 'judge', text: formatJudgeResult(j.result), turn, phase: 'AI_MC_JUDGE' });
             if (j.explanation) {
               next.push({ actor: 'mc', kind: 'note', text: j.explanation, turn, phase: 'MC_EXPLAIN' });
             }
@@ -461,7 +475,7 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
             <div className="text-xs text-slate-500">感情（自動）: {selectedMood || '-'}</div>
             {resolveImage() ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={resolveImage()} alt={selectedMood || '立ち絵'} className="w-full border bg-white" />
+              <img src={resolveImage()} alt={selectedMood || '立ち絵'} className="w-4/5 mx-auto border bg-white block" />
             ) : (
               <div className="border rounded p-4 text-center text-xs text-slate-400">立ち絵はありません</div>
             )}
@@ -508,7 +522,7 @@ export default function PlayPage({ params }: { params: { themeId: string } }) {
           </div>
         </aside>
         <section className="flex flex-col gap-4">
-          <div ref={logRef} className="flex-1 border rounded-lg bg-white p-4 overflow-auto max-h-[70vh] space-y-3">
+          <div ref={logRef} className="flex-1 border rounded-lg bg-white p-4 overflow-auto max-h-[56vh] space-y-3">
             {events.map((ev, i) => {
               const actorKey = (ev.actor || '').toLowerCase();
               const meta = actorMeta[actorKey] || actorMeta.default;
