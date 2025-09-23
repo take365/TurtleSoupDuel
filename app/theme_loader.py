@@ -20,7 +20,7 @@ def get_themes() -> List[ThemeSummary]:
     try:
         session = get_session()
         rows: ResultSet = session.execute(
-            "SELECT theme_id, title, tags, lang FROM themes_by_id"
+            "SELECT theme_id, title, question, tags, lang FROM themes_by_id"
         )
     except NoHostAvailable as exc:  # pragma: no cover - depends on runtime infra
         raise RuntimeError("cassandra_unavailable") from exc
@@ -32,7 +32,16 @@ def get_themes() -> List[ThemeSummary]:
         tags = list(getattr(row, "tags", []) or [])
         lang = getattr(row, "lang", None)
         title = getattr(row, "title", "")
-        summaries.append(ThemeSummary(id=theme_id, title=title, tags=tags or None, lang=lang))
+        question = getattr(row, "question", "")
+        summaries.append(
+            ThemeSummary(
+                id=theme_id,
+                title=title,
+                question=question,
+                tags=tags or None,
+                lang=lang,
+            )
+        )
     return summaries
 
 

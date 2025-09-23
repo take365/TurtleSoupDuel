@@ -98,6 +98,7 @@ class NextTurnResponse(BaseModel):
 class ThemeSummary(BaseModel):
     id: str
     title: str
+    question: Optional[str] = None
     tags: Optional[List[str]] = None
     lang: Optional[str] = None
 

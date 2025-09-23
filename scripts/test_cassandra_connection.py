@@ -1,7 +1,8 @@
 #!/usr/bin/env python
-"""Simple Cassandra connectivity check using environment variables."""
+"""Simple Cassandra connectivity check + dump some themes."""
 import os
 import sys
+import json
 from cassandra.cluster import Cluster
 from cassandra.auth import PlainTextAuthProvider
 
@@ -40,14 +41,18 @@ def main():
         if dc:
             cluster = Cluster(contact_points=hosts, port=port, auth_provider=auth, load_balancing_policy=None)
         session = cluster.connect(keyspace)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"[ERROR] Unable to connect to Cassandra: {exc}", file=sys.stderr)
         sys.exit(1)
 
     try:
-        rows = session.execute("SELECT theme_id, title FROM themes_by_id LIMIT 5")
-        fetched = [(row.theme_id, row.title) for row in rows]
-    except Exception as exc:  # noqa: BLE001
+        # 新規登録した blog_qyuzu_umigame_collection.json を確認するので
+        # theme_id が qyuzu- で始まるものをいくつか取得
+        rows = session.execute(
+            "SELECT theme_id, title, question, solution, tags, lang FROM themes_by_id LIMIT 50"
+        )
+        fetched = [row for row in rows if str(row.theme_id).startswith("qyuzu-")]
+    except Exception as exc:
         print(f"[ERROR] Connected but query failed: {exc}", file=sys.stderr)
         session.shutdown()
         cluster.shutdown()
@@ -55,9 +60,22 @@ def main():
 
     session.shutdown()
     cluster.shutdown()
+
     print("[OK] Cassandra connection succeeded.")
-    for theme_id, title in fetched:
-        print(f"  - {theme_id}: {title}")
+    if not fetched:
+        print("  (no qyuzu-* records found)")
+        return
+
+    for row in fetched[:10]:
+        record = {
+            "id": row.theme_id,
+            "title": row.title,
+            "question": row.question,
+            "solution": row.solution,
+            "tags": row.tags,
+            "lang": row.lang,
+        }
+        print(json.dumps(record, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

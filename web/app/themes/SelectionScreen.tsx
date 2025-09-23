@@ -9,6 +9,7 @@ type ThemeItem = {
   themeId: string;
   title: string;
   snippet?: string;
+  question?: string; // 念のため受け取れるように
   likes?: number;
   liked?: boolean;
   cleared?: boolean;
@@ -249,7 +250,9 @@ export default function SelectionScreen({ themes }: Props) {
                     className={`text-left border rounded-lg p-4 transition h-full ${selected ? 'border-purple-500 bg-purple-50 shadow-sm' : 'border-slate-200 hover:bg-slate-50'}`}
                   >
                     <div className="text-sm font-semibold mb-1">{t.title}</div>
-                    <div className="text-xs text-slate-500 h-12 overflow-hidden">{t.snippet}</div>
+                    <div className="text-xs text-slate-500 h-12 overflow-hidden">
+                      {t.snippet ?? t.question ?? ''}
+                    </div>
                     <div className="mt-3 text-[11px] text-slate-400 flex items-center gap-4">
                       <span
                         role="button"
