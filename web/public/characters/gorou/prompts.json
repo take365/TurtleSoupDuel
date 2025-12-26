@@ -5,7 +5,7 @@
     "image": "goro_neutral.png"
   },
   "興味・前進": {
-    "image": "goro_neutral.png"
+    "image": "goro_run.png"
   },
   "惜しい・再考": {
     "image": "goro_neutral.png"
@@ -17,7 +17,7 @@
     "image": "goro_angry.png"
   },
   "喜び・勝利": {
-    "image": "goro_neutral.png"
+    "image": "goro_excited.png"
   },
   "avatar": "goro.png"
 }
